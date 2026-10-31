@@ -87,7 +87,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback(VkDebugUtilsMessageSeverityFla
 
 #endif
 
-	cemuLog_log(LogType::Force, (char*)pCallbackData->pMessage);
+	cemuLog_log(
+		LogType::Force,
+		"[Vulkan validation] severity=0x{:x}, type=0x{:x}, messageId={} ({}): {}",
+		static_cast<uint32>(messageSeverity),
+		static_cast<uint32>(messageTypes),
+		pCallbackData->messageIdNumber,
+		pCallbackData->pMessageIdName ? pCallbackData->pMessageIdName : "unknown",
+		pCallbackData->pMessage ? pCallbackData->pMessage : "(empty message)");
 
 	return VK_FALSE;
 }
@@ -594,6 +601,18 @@ VulkanRenderer::VulkanRenderer()
 		throw std::runtime_error("No physical GPU could be found with the required extensions and swap chain support.");
 	}
 
+	VkPhysicalDeviceProperties selectedDeviceProperties{};
+	vkGetPhysicalDeviceProperties(m_physicalDevice, &selectedDeviceProperties);
+	cemuLog_log(LogType::Force,
+		"[Vulkan device] name='{}', vendorId=0x{:04x}, deviceId=0x{:04x}, apiVersion={}.{}.{} driverVersion=0x{:x}",
+		selectedDeviceProperties.deviceName,
+		selectedDeviceProperties.vendorID,
+		selectedDeviceProperties.deviceID,
+		VK_VERSION_MAJOR(selectedDeviceProperties.apiVersion),
+		VK_VERSION_MINOR(selectedDeviceProperties.apiVersion),
+		VK_VERSION_PATCH(selectedDeviceProperties.apiVersion),
+		selectedDeviceProperties.driverVersion);
+
 	CheckDeviceExtensionSupport(m_physicalDevice, m_featureControl); // todo - merge this with GetDeviceFeatures and separate from IsDeviceSuitable?
 
 	DetermineVendor();
@@ -720,6 +739,12 @@ VulkanRenderer::VulkanRenderer()
 	if (useValidationLayer && m_featureControl.instanceExtensions.debug_utils)
 	{
 		PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT"));
+		if (!vkCreateDebugUtilsMessengerEXT)
+		{
+			cemuLog_log(LogType::Force, "[Vulkan validation] VK_EXT_debug_utils is reported available but vkCreateDebugUtilsMessengerEXT could not be loaded");
+		}
+		else
+		{
 
 		VkDebugUtilsMessengerCreateInfoEXT debugCallback{};
 		debugCallback.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -729,9 +754,16 @@ VulkanRenderer::VulkanRenderer()
 		debugCallback.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 		debugCallback.pfnUserCallback = &DebugUtilsCallback;
 
-		vkCreateDebugUtilsMessengerEXT(m_instance, &debugCallback, nullptr, &m_debugCallback);
-
-		cemuLog_log(LogType::Force, "Debug: Vulkan validation layer enabled, vkCreateDebugUtilsMessengerEXT will be used to log validation errors");
+			VkResult debugMessengerResult = vkCreateDebugUtilsMessengerEXT(m_instance, &debugCallback, nullptr, &m_debugCallback);
+			if (debugMessengerResult == VK_SUCCESS)
+				cemuLog_log(LogType::Force, "[Vulkan validation] Debug messenger created successfully; validation callbacks are active");
+			else
+				cemuLog_log(LogType::Force, "[Vulkan validation] Failed to create debug messenger: VkResult {}", static_cast<sint32>(debugMessengerResult));
+		}
+	}
+	else if (useValidationLayer)
+	{
+		cemuLog_log(LogType::Force, "[Vulkan validation] VK_EXT_debug_utils is unavailable; validation messages cannot be captured by the debug messenger");
 	}
 
 	if (this->IsTracingToolEnabled())
