@@ -348,6 +348,24 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_getVulkanDiagnosticLog(JNIEn
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setVulkanValidationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
+{
+    uint64 flags = s_loggingFlagMask;
+    const uint64 validationFlag = cemuLog_getFlag(LogType::VulkanValidation);
+    if (enabled)
+        flags |= validationFlag;
+    else
+        flags &= ~validationFlag;
+    cemuLog_setActiveLoggingFlags(flags);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_isVulkanValidationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+    return cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_setSurface(JNIEnv* env, [[maybe_unused]] jclass clazz, jobject surface, jboolean isMainCanvas)
 {
 	JNIUtils::HandleNativeException(env, [&]() {
