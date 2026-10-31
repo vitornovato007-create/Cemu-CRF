@@ -21,6 +21,7 @@
 #include <android/native_window_jni.h>
 #include <chrono>
 #include <deque>
+#include <fstream>
 #include <mutex>
 
 // forward declaration from main.cpp
@@ -48,6 +49,11 @@ namespace NativeEmulation
             line.push_back('\n');
 
             std::lock_guard lock(m_mutex);
+            if (m_file.is_open())
+            {
+                m_file.write(line.data(), static_cast<std::streamsize>(line.size()));
+                m_file.flush();
+            }
             m_lines.emplace_back(std::move(line));
             m_totalBytes += m_lines.back().size();
             while (m_totalBytes > kMaxBytes && !m_lines.empty())
@@ -63,13 +69,36 @@ namespace NativeEmulation
             Log(filter, boost::nowide::narrow(message));
         }
 
+        void StartPersistentCapture(const fs::path& path)
+        {
+            std::lock_guard lock(m_mutex);
+            m_persistentPath = path;
+            std::error_code error;
+            if (fs::exists(path, error) && fs::file_size(path, error) > kMaxBytes)
+                fs::remove(path, error);
+            m_file.open(path, std::ios::out | std::ios::app);
+            if (m_file.is_open())
+            {
+                m_file << "\n===== Android diagnostic capture session started =====\n";
+                m_file.flush();
+            }
+        }
+
         std::string Snapshot()
         {
             std::lock_guard lock(m_mutex);
+            if (m_file.is_open())
+                m_file.flush();
+            if (!m_persistentPath.empty())
+            {
+                std::ifstream input(m_persistentPath, std::ios::binary);
+                if (input.is_open())
+                    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+            }
             std::string result;
             result.reserve(m_totalBytes);
             if (m_wasTrimmed)
-                result.append("[WARNING] Older log entries were discarded after the 32 MiB capture limit was reached.\n");
+                result.append("[WARNING] Older in-memory log entries were discarded after the 32 MiB capture limit was reached.\n");
             for (const auto& line : m_lines)
                 result.append(line);
             return result;
@@ -80,6 +109,8 @@ namespace NativeEmulation
         static const std::chrono::steady_clock::time_point s_startTime;
         std::mutex m_mutex;
         std::deque<std::string> m_lines;
+        fs::path m_persistentPath;
+        std::ofstream m_file;
         size_t m_totalBytes = 0;
         bool m_wasTrimmed = false;
     };
@@ -309,10 +340,11 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_
 {
 	FilesystemAndroid::SetFilesystemCallbacks(std::make_shared<AndroidFilesystemCallbacks>());
 	GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
-	cemuLog_setCallbacks(&NativeEmulation::s_androidLogCapture);
 	NativeEmulation::CreateCemuDirectories();
 	NetworkConfig::LoadOnce();
 	ActiveSettings::Init();
+	NativeEmulation::s_androidLogCapture.StartPersistentCapture(ActiveSettings::GetUserDataPath("vulkan-diagnostic.log"));
+	cemuLog_setCallbacks(&NativeEmulation::s_androidLogCapture);
 	LatteOverlay_init();
 	CemuCommonInit();
 }
