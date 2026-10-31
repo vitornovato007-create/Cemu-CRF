@@ -74,6 +74,8 @@ namespace NativeEmulation
             std::lock_guard lock(m_mutex);
             m_persistentPath = path;
             std::error_code error;
+            fs::create_directories(path.parent_path(), error);
+            error.clear();
             if (fs::exists(path, error) && fs::file_size(path, error) > kMaxBytes)
                 fs::remove(path, error);
             m_file.open(path, std::ios::out | std::ios::app);
@@ -125,11 +127,12 @@ namespace NativeEmulation
         report.reserve(1024 * 1024);
         report.append("Cemu Android Vulkan diagnostic report\n");
         report.append("=======================================\n");
-        report.append("Capture: Cemu log messages retained in memory since Android initialization.\n");
+        report.append("Capture: persistent Cemu native log; entries are flushed to app-private storage as they are emitted.\n");
         report.append("Capture limit: 32 MiB; if exceeded, the oldest entries are removed and this is reported below.\n");
-        report.append("Vulkan validation layer: ");
-        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "enabled\n" : "disabled\n");
-        report.append("Note: Vulkan device, driver, extension, pipeline, shader and validation messages are included when emitted by Cemu.\n\n");
+        report.append("Vulkan validation requested: ");
+        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\n" : "no\n");
+        report.append("Actual validation-layer and debug-messenger initialization status is recorded in the session log below.\n");
+        report.append("The file is append-only across app restarts so diagnostics survive an app crash.\n\n");
         report.append(s_androidLogCapture.Snapshot());
         if (report.back() != '\n')
             report.push_back('\n');
