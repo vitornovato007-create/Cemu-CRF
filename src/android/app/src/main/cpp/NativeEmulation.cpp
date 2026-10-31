@@ -29,7 +29,7 @@ void CemuCommonInit();
 namespace NativeEmulation
 {
 
-    class AndroidLogCapture final : public LogCallbacks
+    class AndroidLogCapture final : public LoggingCallbacks
     {
     public:
         void Log(std::string_view filter, std::string_view message) override
@@ -309,7 +309,7 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_
 {
 	FilesystemAndroid::SetFilesystemCallbacks(std::make_shared<AndroidFilesystemCallbacks>());
 	GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
-	cemuLog_registerLogCallbacks(&NativeEmulation::s_androidLogCapture);
+	cemuLog_setCallbacks(&NativeEmulation::s_androidLogCapture);
 	NativeEmulation::CreateCemuDirectories();
 	NetworkConfig::LoadOnce();
 	ActiveSettings::Init();
