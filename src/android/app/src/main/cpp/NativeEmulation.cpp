@@ -8,6 +8,7 @@
 #include "Cafe/TitleList/TitleId.h"
 #include "Cafe/TitleList/TitleList.h"
 #include "Cemu/ncrypto/ncrypto.h"
+#include "Cemu/Logging/CemuLogging.h"
 #include "config/ActiveSettings.h"
 #include "input/InputManager.h"
 #include "JNIUtils.h"
@@ -18,12 +19,80 @@
 #endif // HAS_CUBEB
 
 #include <android/native_window_jni.h>
+#include <deque>
+#include <mutex>
 
 // forward declaration from main.cpp
 void CemuCommonInit();
 
 namespace NativeEmulation
 {
+
+    class AndroidLogCapture final : public LogCallbacks
+    {
+    public:
+        void Log(std::string_view filter, std::string_view message) override
+        {
+            std::string line;
+            if (!filter.empty())
+            {
+                line.reserve(filter.size() + message.size() + 4);
+                line.append("[");
+                line.append(filter);
+                line.append("] ");
+            }
+            line.append(message);
+            line.push_back('\n');
+
+            std::lock_guard lock(m_mutex);
+            m_lines.emplace_back(std::move(line));
+            m_totalBytes += m_lines.back().size();
+            while (m_totalBytes > kMaxBytes && !m_lines.empty())
+            {
+                m_totalBytes -= m_lines.front().size();
+                m_lines.pop_front();
+            }
+        }
+
+        void Log(std::string_view filter, std::wstring_view message) override
+        {
+            Log(filter, boost::nowide::narrow(message));
+        }
+
+        std::string Snapshot()
+        {
+            std::lock_guard lock(m_mutex);
+            std::string result;
+            result.reserve(m_totalBytes);
+            for (const auto& line : m_lines)
+                result.append(line);
+            return result;
+        }
+
+    private:
+        static constexpr size_t kMaxBytes = 16 * 1024 * 1024;
+        std::mutex m_mutex;
+        std::deque<std::string> m_lines;
+        size_t m_totalBytes = 0;
+    };
+
+    AndroidLogCapture s_androidLogCapture;
+
+    std::string GetVulkanDiagnosticLog()
+    {
+        std::string report;
+        report.reserve(1024 * 1024);
+        report.append("Cemu Android Vulkan diagnostic report\n");
+        report.append("=======================================\n");
+        report.append("Capture: Cemu log messages retained in memory since Android initialization.\n");
+        report.append("Vulkan validation layer: ");
+        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "enabled\n" : "disabled\n");
+        report.append("Note: Vulkan device, driver, extension, pipeline, shader and validation messages are included when emitted by Cemu.\n\n");
+        report.append(s_androidLogCapture.Snapshot());
+        if (report.back() != '\n')
+            report.push_back('\n');
+        return report;
+    }
 
 	void CreateAudioDevice(IAudioAPI::AudioAPI audioApi, AudioChannels channels, sint32 volume, bool isTV)
 	{
@@ -233,6 +302,7 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_
 	NetworkConfig::LoadOnce();
 	ActiveSettings::Init();
 	LatteOverlay_init();
+	cemuLog_registerLogCallbacks(&NativeEmulation::s_androidLogCapture);
 	CemuCommonInit();
 }
 
@@ -269,6 +339,12 @@ extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_supportsLoadingCustomDriver([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
 	return SupportsLoadingCustomDriver();
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT jstring JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getVulkanDiagnosticLog(JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+    return JNIUtils::ToJString(env, NativeEmulation::GetVulkanDiagnosticLog());
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
