@@ -3,6 +3,8 @@
 
 #include "HW/Latte/Core/LattePM4.h"
 
+#include <chrono>
+
 namespace TCL
 {
 	SysAllocator<coreinit::OSEvent> s_updateRetirementEvent;
@@ -44,22 +46,40 @@ namespace TCL
 
 	int TCLWaitTimestamp(TCLTimestampId id, uint64 waitTs, uint64 timeout)
 	{
-		if (id == TCLTimestampId::TIMESTAMP_LAST_BUFFER_RETIRED)
-		{
-			while ( true )
-			{
-				stdx::atomic_ref<uint64be> retireTimestamp(s_tclStatePPC->gpuRetireMarker);
-				uint64 currentTimestamp = retireTimestamp.load();
-				if (currentTimestamp >= waitTs)
-					return 0;
-				coreinit::OSWaitEvent(s_updateRetirementEvent.GetPtr());
-			}
-		}
-		else
+		if (id != TCLTimestampId::TIMESTAMP_LAST_BUFFER_RETIRED)
 		{
 			cemuLog_log(LogType::Force, "TCLWaitTimestamp(): Unsupported timestamp ID {}", (uint32)id);
+			return -1;
 		}
-		return 0;
+
+		// GX2 supplies timeout in Espresso timer ticks; OSWaitEventWithTimeout expects nanoseconds.
+		const uint64 timeoutNs = (timeout / Espresso::TIMER_CLOCK) * 1000000000ULL
+			+ ((timeout % Espresso::TIMER_CLOCK) * 1000000000ULL) / Espresso::TIMER_CLOCK;
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::nanoseconds(timeoutNs);
+
+		while (true)
+		{
+			stdx::atomic_ref<uint64be> retireTimestamp(s_tclStatePPC->gpuRetireMarker);
+			if (retireTimestamp.load() >= waitTs)
+				return 0;
+
+			const auto now = std::chrono::steady_clock::now();
+			if (now >= deadline)
+			{
+				cemuLog_log(LogType::Force, "[TCL] Timeout waiting for GPU retirement marker: target={}, current={}", waitTs, retireTimestamp.load());
+				return -1;
+			}
+
+			const auto remainingNs = static_cast<uint64>(std::chrono::duration_cast<std::chrono::nanoseconds>(deadline - now).count());
+			if (!coreinit::OSWaitEventWithTimeout(s_updateRetirementEvent.GetPtr(), remainingNs))
+			{
+				// Recheck the marker once after timeout to avoid reporting a race with the final GPU write.
+				if (retireTimestamp.load() >= waitTs)
+					return 0;
+				cemuLog_log(LogType::Force, "[TCL] GPU retirement wait expired: target={}, current={}", waitTs, retireTimestamp.load());
+				return -1;
+			}
+		}
 	}
 
 	static constexpr uint32 TCL_RING_BUFFER_SIZE = 4096; // in U32s
@@ -80,18 +100,34 @@ namespace TCL
 		return true;
 	}
 
-	void TCLWaitForRBSpace(uint32be numU32s)
+	bool TCLWaitForRBSpace(uint32 numU32s)
 	{
+		// Keep one slot empty to distinguish a full ring from an empty ring.
+		if (numU32s >= TCL_RING_BUFFER_SIZE)
+		{
+			cemuLog_log(LogType::Force, "[TCL] Submission too large for command ring: {} words (capacity {})", numU32s, TCL_RING_BUFFER_SIZE - 1);
+			return false;
+		}
+
 		uint32 writeIndex = tclRingBufferA_writeIndex.load(std::memory_order::relaxed);
+		uint32 spinCount = 0;
 		while (true)
 		{
 			uint32 readIndex = tclRingBufferA_readIndex.load(std::memory_order::acquire);
 			uint32 distance = (readIndex + TCL_RING_BUFFER_SIZE - writeIndex) & (TCL_RING_BUFFER_SIZE - 1);
-			if (writeIndex == readIndex) // buffer completely empty
+			if (writeIndex == readIndex)
 				distance = TCL_RING_BUFFER_SIZE;
-			if (distance >= numU32s + 1) // assume distance minus one, because we are never allowed to completely wrap around
-				break;
-			_mm_pause();
+			if (distance >= numU32s + 1)
+				return true;
+
+			if (spinCount++ < 256)
+				_mm_pause();
+			else
+			{
+				// Avoid monopolizing a CPU core while the Latte consumer is processing commands.
+				std::this_thread::yield();
+				spinCount = 0;
+			}
 		}
 	}
 
@@ -138,7 +174,8 @@ namespace TCL
 		uint32 totalCommandLength = cmdLen;
 		totalCommandLength += 6; // space needed for TCLSubmitRetireMarker
 
-		TCLWaitForRBSpace(totalCommandLength);
+		if (!TCLWaitForRBSpace(totalCommandLength))
+			return -1;
 
 		// submit command buffer
 		TCLWriteCmd(cmd, cmdLen);
