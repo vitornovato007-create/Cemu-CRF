@@ -298,11 +298,11 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_
 {
 	FilesystemAndroid::SetFilesystemCallbacks(std::make_shared<AndroidFilesystemCallbacks>());
 	GetConfigHandle().SetFilename(ActiveSettings::GetConfigPath("settings.xml").generic_wstring());
+	cemuLog_registerLogCallbacks(&NativeEmulation::s_androidLogCapture);
 	NativeEmulation::CreateCemuDirectories();
 	NetworkConfig::LoadOnce();
 	ActiveSettings::Init();
 	LatteOverlay_init();
-	cemuLog_registerLogCallbacks(&NativeEmulation::s_androidLogCapture);
 	CemuCommonInit();
 }
 
