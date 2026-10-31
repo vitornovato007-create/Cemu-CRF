@@ -56,4 +56,10 @@ object NativeEmulation {
 
     @JvmStatic
     external fun getVulkanDiagnosticLog(): String
+
+    @JvmStatic
+    external fun setVulkanValidationEnabled(enabled: Boolean)
+
+    @JvmStatic
+    external fun isVulkanValidationEnabled(): Boolean
 }
