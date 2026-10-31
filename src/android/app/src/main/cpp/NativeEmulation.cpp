@@ -19,6 +19,7 @@
 #endif // HAS_CUBEB
 
 #include <android/native_window_jni.h>
+#include <chrono>
 #include <deque>
 #include <mutex>
 
@@ -33,10 +34,12 @@ namespace NativeEmulation
     public:
         void Log(std::string_view filter, std::string_view message) override
         {
-            std::string line;
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - s_startTime).count();
+
+            std::string line = fmt::format("[+{}.{:03d}s] ", elapsed / 1000, elapsed % 1000);
             if (!filter.empty())
             {
-                line.reserve(filter.size() + message.size() + 4);
                 line.append("[");
                 line.append(filter);
                 line.append("] ");
@@ -51,6 +54,7 @@ namespace NativeEmulation
             {
                 m_totalBytes -= m_lines.front().size();
                 m_lines.pop_front();
+                m_wasTrimmed = true;
             }
         }
 
@@ -64,17 +68,23 @@ namespace NativeEmulation
             std::lock_guard lock(m_mutex);
             std::string result;
             result.reserve(m_totalBytes);
+            if (m_wasTrimmed)
+                result.append("[WARNING] Older log entries were discarded after the 32 MiB capture limit was reached.\n");
             for (const auto& line : m_lines)
                 result.append(line);
             return result;
         }
 
     private:
-        static constexpr size_t kMaxBytes = 16 * 1024 * 1024;
+        static constexpr size_t kMaxBytes = 32 * 1024 * 1024;
+        static const std::chrono::steady_clock::time_point s_startTime;
         std::mutex m_mutex;
         std::deque<std::string> m_lines;
         size_t m_totalBytes = 0;
+        bool m_wasTrimmed = false;
     };
+
+    const std::chrono::steady_clock::time_point AndroidLogCapture::s_startTime = std::chrono::steady_clock::now();
 
     AndroidLogCapture s_androidLogCapture;
 
@@ -85,6 +95,7 @@ namespace NativeEmulation
         report.append("Cemu Android Vulkan diagnostic report\n");
         report.append("=======================================\n");
         report.append("Capture: Cemu log messages retained in memory since Android initialization.\n");
+        report.append("Capture limit: 32 MiB; if exceeded, the oldest entries are removed and this is reported below.\n");
         report.append("Vulkan validation layer: ");
         report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "enabled\n" : "disabled\n");
         report.append("Note: Vulkan device, driver, extension, pipeline, shader and validation messages are included when emitted by Cemu.\n\n");
