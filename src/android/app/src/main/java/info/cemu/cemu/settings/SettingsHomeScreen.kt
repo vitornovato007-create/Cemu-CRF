@@ -5,6 +5,10 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import info.cemu.cemu.nativeinterface.NativeEmulation
@@ -29,6 +33,7 @@ fun SettingsHomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var validationEnabled by remember { mutableStateOf(NativeEmulation.isVulkanValidationEnabled()) }
     val createLogDocument = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
@@ -90,6 +95,18 @@ fun SettingsHomeScreen(
         Button(
             label = tr("Account settings"),
             onClick = dropUnlessResumed(block = goToAccountSettings)
+        )
+        Button(
+            label = if (validationEnabled) "Vulkan validation: ON (slower)" else "Enable Vulkan validation (slower)",
+            onClick = dropUnlessResumed {
+                validationEnabled = !validationEnabled
+                NativeEmulation.setVulkanValidationEnabled(validationEnabled)
+                Toast.makeText(
+                    context,
+                    if (validationEnabled) "Vulkan validation enabled for the next game launch" else "Vulkan validation disabled",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         )
         Button(
             label = "Export Vulkan diagnostic log (.txt)",
