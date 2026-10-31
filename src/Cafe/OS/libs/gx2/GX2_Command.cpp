@@ -317,9 +317,8 @@ namespace GX2
 
 	bool GX2WaitTimeStamp(uint64 tsWait)
 	{
-		// handle GPU timeout here? But for now we timeout after 60 seconds
-		TCL::TCLWaitTimestamp(TCL::TCLTimestampId::TIMESTAMP_LAST_BUFFER_RETIRED, tsWait, Espresso::TIMER_CLOCK * 60);
-		return true;
+		// Wait at most 60 seconds for the GPU to retire the submitted command buffer.
+		return TCL::TCLWaitTimestamp(TCL::TCLTimestampId::TIMESTAMP_LAST_BUFFER_RETIRED, tsWait, Espresso::TIMER_CLOCK * 60) == 0;
 	}
 
 	/*
