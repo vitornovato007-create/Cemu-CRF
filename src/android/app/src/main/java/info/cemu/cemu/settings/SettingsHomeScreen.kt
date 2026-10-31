@@ -1,6 +1,16 @@
 package info.cemu.cemu.settings
 
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import info.cemu.cemu.nativeinterface.NativeEmulation
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.dropUnlessResumed
 import info.cemu.cemu.common.ui.components.Button
 import info.cemu.cemu.common.ui.components.ScreenContent
@@ -17,6 +27,38 @@ fun SettingsHomeScreen(
     goToOverlaySettings: () -> Unit,
     navigateBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val createLogDocument = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val report = buildString {
+                        append(NativeEmulation.getVulkanDiagnosticLog())
+                        append("\n\nAndroid device: ${Build.MANUFACTURER} ${Build.MODEL}")
+                        append("\nAndroid API level: ${Build.VERSION.SDK_INT}\n")
+                    }
+                    val output = context.contentResolver.openOutputStream(uri)
+                        ?: throw IllegalStateException("Unable to open the selected destination")
+                    output.use { it.write(report.toByteArray(Charsets.UTF_8)) }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Vulkan diagnostic log exported", Toast.LENGTH_LONG).show()
+                    }
+                } catch (exception: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            "Failed to export Vulkan log: ${exception.message ?: "unknown error"}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
     ScreenContent(
         appBarText = tr("Settings"),
         navigateBack = navigateBack,
@@ -48,6 +90,12 @@ fun SettingsHomeScreen(
         Button(
             label = tr("Account settings"),
             onClick = dropUnlessResumed(block = goToAccountSettings)
+        )
+        Button(
+            label = "Export Vulkan diagnostic log (.txt)",
+            onClick = dropUnlessResumed {
+                createLogDocument.launch("cemu-vulkan-diagnostic.txt")
+            }
         )
     }
 }
