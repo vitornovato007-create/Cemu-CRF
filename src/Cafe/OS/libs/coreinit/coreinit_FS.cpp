@@ -226,32 +226,33 @@ namespace coreinit
 		return clientNum;
 	}
 
+	// Caller must hold s_fsGlobalMutex.
+	bool __FSIsClientRegisteredLocked(FSClientBody_t* fsClientBody)
+	{
+		if (!fsClientBody)
+			return false;
+
+		FSClientBody_t* const first = g_fsRegisteredClientBodies;
+		FSClientBody_t* current = first;
+		while (current)
+		{
+			if (current == fsClientBody)
+				return true;
+
+			current = current->fsClientBodyNext.GetPtr();
+			// The registered-client list may be circular.
+			if (current == first)
+				break;
+		}
+		return false;
+	}
+
 	bool __FSIsClientRegistered(FSClientBody_t* fsClientBody)
 	{
 		FSLockMutex();
-		FSClientBody_t* fsClientBodyFirst = g_fsRegisteredClientBodies;
-		FSClientBody_t* fsClientBodyItr = fsClientBodyFirst;
-		if (fsClientBodyItr == NULL)
-		{
-			FSUnlockMutex();
-			return false;
-		}
-		while (true)
-		{
-			if (fsClientBody == fsClientBodyItr)
-			{
-				FSUnlockMutex();
-				return true;
-			}
-			// next
-			fsClientBodyItr = fsClientBodyItr->fsClientBodyNext.GetPtr();
-			if (fsClientBodyItr == MPTR_NULL)
-				break;
-			if (fsClientBodyItr == fsClientBodyFirst)
-				break;
-		}
+		const bool registered = __FSIsClientRegisteredLocked(fsClientBody);
 		FSUnlockMutex();
-		return false;
+		return registered;
 	}
 
 	void __FSInitCmdQueue(FSCmdQueue* fsCmdQueueBE, MPTR dequeueHandlerFuncMPTR, uint32 numMaxCommandsInFlight)
@@ -293,7 +294,7 @@ namespace coreinit
 				return FS_RESULT::FATAL_ERROR;
 			}
 		}
-		if (__FSIsClientRegistered(__FSGetClientBody(fsClient)))
+		if (__FSIsClientRegisteredLocked(__FSGetClientBody(fsClient)))
 		{
 			FSUnlockMutex();
 			__FSErrorAndBlock("Called FSAddClient(Ex) on client that was already added");
