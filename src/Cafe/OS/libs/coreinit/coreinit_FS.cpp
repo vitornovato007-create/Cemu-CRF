@@ -732,21 +732,21 @@ namespace coreinit
 		ppcDefineParamU32(iosResult, 0);
 		ppcDefineParamPtr(cmd, FSCmdBlockBody, 1);
 
-		FSA_RESULT fsaStatus = _FSIosErrorToFSAStatus((IOS_ERROR)iosResult);
-
-		cmd->statusCode = _swapEndianU32(FSA_CMD_STATUS_CODE_D900A26);
-		cmd->lastFSAStatus = fsaStatus;
-
-		// translate error code to FSStatus
-		FS_RESULT fsStatus = _FSAStatusToFSStatus(fsaStatus);
-
-		// On actual hardware this delegates the processing to the AppIO threads, but for now we just run it directly from the IPC thread
+		// On actual hardware this delegates the processing to the AppIO threads, but for now we just run it directly from the IPC thread.
+		// Validate the command pointer before touching any command-block fields.
 		if (!cmd)
 		{
 			cemuLog_log(LogType::Force, "FS response callback received a null command block");
 			osLib_returnFromFunction(hCPU, 0);
 			return;
 		}
+
+		FSA_RESULT fsaStatus = _FSIosErrorToFSAStatus((IOS_ERROR)iosResult);
+		cmd->statusCode = _swapEndianU32(FSA_CMD_STATUS_CODE_D900A26);
+		cmd->lastFSAStatus = fsaStatus;
+
+		// translate error code to FSStatus
+		FS_RESULT fsStatus = _FSAStatusToFSStatus(fsaStatus);
 
 		FSClientBody_t* client = cmd->fsClientBody.GetPtr();
 		if (!client)
