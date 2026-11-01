@@ -15,6 +15,9 @@
 
 bool s_isLoadingShadersVk{ false };
 class FileCache* s_spirvCache{nullptr};
+// FileCache is shared by the shader compiler workers. Serialize its operations
+// while allowing GLSL parsing and SPIR-V generation to run in parallel.
+std::mutex s_spirvCacheMutex;
 
 extern std::atomic_int g_compiled_shaders_total;
 extern std::atomic_int g_compiled_shaders_async;
@@ -138,7 +141,9 @@ public:
 		// Android devices have a tighter CPU/RAM budget. Keep shader compilation
 		// asynchronous, but limit parallel glslang instances to reduce peak memory.
 #if defined(__ANDROID__)
-		const uint32 threadCount = 1;
+		// Two workers allow shader compilation to overlap without saturating
+		// the CPU/RAM budget on Android devices.
+		const uint32 threadCount = 2;
 #else
 		const uint32 threadCount = 2;
 #endif
@@ -308,12 +313,23 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
 		std::vector<uint8> cacheFileData;
-		if (s_spirvCache->GetFile({ h1, h2 }, cacheFileData))
+		bool cacheHit = false;
+		{
+			std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
+			if (s_spirvCache)
+				cacheHit = s_spirvCache->GetFile({ h1, h2 }, cacheFileData);
+		}
+		if (cacheHit)
 		{
 			// generate shader from cached SPIR-V buffer
-			CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
-			FinishCompilation();
-			return;
+			if (cacheFileData.empty() || (cacheFileData.size() % sizeof(uint32)) != 0)
+				cemuLog_log(LogType::Force, "[Shader cache] Invalid SPIR-V cache entry {:016x}_{:016x}; recompiling", m_baseHash, m_auxHash);
+			else
+			{
+				CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
+				FinishCompilation();
+				return;
+			}
 		}
 	}
 
@@ -414,7 +430,9 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	{
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
-		s_spirvCache->AddFile({ h1, h2 }, (const uint8*)spirvBuffer.data(), spirvBuffer.size() * sizeof(uint32));
+		std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
+		if (s_spirvCache)
+			s_spirvCache->AddFile({ h1, h2 }, (const uint8*)spirvBuffer.data(), spirvBuffer.size() * sizeof(uint32));
 	}
 
 	CreateVkShaderModule(spirvBuffer);
@@ -467,17 +485,20 @@ bool RendererShaderVk::WaitForCompiled()
 
 void RendererShaderVk::ShaderCacheLoading_begin(uint64 cacheTitleId)
 {
-	if (s_spirvCache)
 	{
+		std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
 		delete s_spirvCache;
 		s_spirvCache = nullptr;
 	}
 	uint32 spirvCacheMagic = GeneratePrecompiledCacheId();
 	const std::string cacheFilename = fmt::format("{:016x}_spirv.bin", cacheTitleId);
 	const fs::path cachePath = ActiveSettings::GetCachePath("shaderCache/precompiled/{}", cacheFilename);
-	s_spirvCache = FileCache::Open(cachePath, true, spirvCacheMagic);
-	if (s_spirvCache == nullptr)
-		cemuLog_log(LogType::Force, "Unable to open SPIR-V cache {}", cacheFilename);
+	{
+		std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
+		s_spirvCache = FileCache::Open(cachePath, true, spirvCacheMagic);
+		if (s_spirvCache == nullptr)
+			cemuLog_log(LogType::Force, "Unable to open SPIR-V cache {}", cacheFilename);
+	}
 	s_isLoadingShadersVk = true;
 }
 
@@ -489,6 +510,7 @@ void RendererShaderVk::ShaderCacheLoading_end()
 
 void RendererShaderVk::ShaderCacheLoading_Close()
 {
-    delete s_spirvCache;
-    s_spirvCache = nullptr;
+	std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
+	delete s_spirvCache;
+	s_spirvCache = nullptr;
 }
