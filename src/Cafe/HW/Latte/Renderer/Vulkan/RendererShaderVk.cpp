@@ -13,7 +13,7 @@
 #include <exception>
 #include "util/helpers/helpers.h"
 
-bool s_isLoadingShadersVk{ false };
+std::atomic<bool> s_isLoadingShadersVk{ false };
 class FileCache* s_spirvCache{nullptr};
 // FileCache is shared by the shader compiler workers. Serialize its operations
 // while allowing GLSL parsing and SPIR-V generation to run in parallel.
@@ -307,7 +307,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	const bool compileWithDebugInfo = ((VulkanRenderer*)g_renderer.get())->IsTracingToolEnabled();
 
 	// try to retrieve SPIR-V module from cache
-	if (s_isLoadingShadersVk && (m_isGameShader && !m_isGfxPackShader) && s_spirvCache && !compileWithDebugInfo)
+	if (s_isLoadingShadersVk.load(std::memory_order::acquire) && (m_isGameShader && !m_isGfxPackShader) && !compileWithDebugInfo)
 	{
 		cemu_assert_debug(m_baseHash != 0);
 		uint64 h1, h2;
