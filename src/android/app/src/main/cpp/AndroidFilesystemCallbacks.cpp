@@ -50,7 +50,7 @@ int AndroidFilesystemCallbacks::OpenContentUri(const std::filesystem::path& uri)
 
     JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
         jstring uriString = JNIUtils::ToJString(env, uri);
-        if (!uriString || HasPendingJavaException(env, "creating URI string"))
+        if (HasPendingJavaException(env, "creating URI string") || !uriString)
             return;
         fd = env->CallStaticIntMethod(*m_fileUtilClass, m_openContentUriMid, uriString);
         env->DeleteLocalRef(uriString);
@@ -73,7 +73,7 @@ std::vector<std::filesystem::path> AndroidFilesystemCallbacks::ListFiles(const s
 
     JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
         jstring uriString = JNIUtils::ToJString(env, uri);
-        if (!uriString || HasPendingJavaException(env, "creating list URI string"))
+        if (HasPendingJavaException(env, "creating list URI string") || !uriString)
             return;
 
         jobjectArray array = static_cast<jobjectArray>(
@@ -126,7 +126,7 @@ bool AndroidFilesystemCallbacks::CallBooleanFunction(const std::filesystem::path
 
     JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
         jstring uriString = JNIUtils::ToJString(env, uri);
-        if (!uriString || HasPendingJavaException(env, "creating query URI string"))
+        if (HasPendingJavaException(env, "creating query URI string") || !uriString)
             return;
         result = env->CallStaticBooleanMethod(*m_fileUtilClass, methodId, uriString) == JNI_TRUE;
         env->DeleteLocalRef(uriString);
