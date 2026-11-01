@@ -46,21 +46,30 @@ namespace NativeEmulation
                 line.append("] ");
             }
             line.append(message);
-            line.push_back('\n');
+            line.push_back('\\n');
 
             std::lock_guard lock(m_mutex);
-            if (m_file.is_open())
-            {
-                m_file.write(line.data(), static_cast<std::streamsize>(line.size()));
-                m_file.flush();
-            }
-            m_lines.emplace_back(std::move(line));
-            m_totalBytes += m_lines.back().size();
+            m_lines.emplace_back(line);
+            m_totalBytes += line.size();
             while (m_totalBytes > kMaxBytes && !m_lines.empty())
             {
                 m_totalBytes -= m_lines.front().size();
                 m_lines.pop_front();
                 m_wasTrimmed = true;
+            }
+
+            if (m_file.is_open())
+            {
+                RotateIfNeeded(line.size());
+                if (m_file.is_open())
+                {
+                    m_file.write(line.data(), static_cast<std::streamsize>(line.size()));
+                    m_file.flush();
+                    if (m_file)
+                        m_fileBytes += line.size();
+                    else
+                        m_fileError = "write/flush failed";
+                }
             }
         }
 
@@ -73,16 +82,46 @@ namespace NativeEmulation
         {
             std::lock_guard lock(m_mutex);
             m_persistentPath = path;
+            m_previousPath = path;
+            m_previousPath += ".previous";
+
             std::error_code error;
             fs::create_directories(path.parent_path(), error);
+            if (error)
+                m_fileError = fmt::format("cannot create log directory: {}", error.message());
+
             error.clear();
-            if (fs::exists(path, error) && fs::file_size(path, error) > kMaxBytes)
-                fs::remove(path, error);
-            m_file.open(path, std::ios::out | std::ios::app);
+            if (fs::exists(path, error))
+            {
+                error.clear();
+                m_fileBytes = fs::file_size(path, error);
+                if (error)
+                {
+                    m_fileBytes = 0;
+                    m_fileError = fmt::format("cannot inspect existing log: {}", error.message());
+                }
+            }
+
+            if (m_fileBytes > kMaxBytes)
+                RotateExistingFile();
+
+            m_file.open(m_persistentPath, std::ios::out | std::ios::app | std::ios::binary);
+            if (!m_file.is_open())
+            {
+                m_fileError = "cannot open persistent diagnostic log";
+                return;
+            }
+
+            const std::string session = "\\n===== Android diagnostic capture session started =====\\n";
+            RotateIfNeeded(session.size());
             if (m_file.is_open())
             {
-                m_file << "\n===== Android diagnostic capture session started =====\n";
+                m_file.write(session.data(), static_cast<std::streamsize>(session.size()));
                 m_file.flush();
+                if (m_file)
+                    m_fileBytes += session.size();
+                else
+                    m_fileError = "failed to write session header";
             }
         }
 
@@ -91,16 +130,25 @@ namespace NativeEmulation
             std::lock_guard lock(m_mutex);
             if (m_file.is_open())
                 m_file.flush();
-            if (!m_persistentPath.empty())
-            {
-                std::ifstream input(m_persistentPath, std::ios::binary);
-                if (input.is_open())
-                    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-            }
+
             std::string result;
-            result.reserve(m_totalBytes);
+            result.reserve(std::min<size_t>(m_fileBytes + 1024, kMaxBytes * 2 + 4096));
+            AppendFileIfPresent(m_previousPath, result);
+            AppendFileIfPresent(m_persistentPath, result);
+
+            if (!result.empty())
+            {
+                if (!m_fileError.empty())
+                    result.append("\\n[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\\n");
+                return result;
+            }
+
+            result.reserve(m_totalBytes + 256);
+            result.append("Persistent log file unavailable; showing bounded in-memory capture only.\\n");
+            if (!m_fileError.empty())
+                result.append("[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\\n");
             if (m_wasTrimmed)
-                result.append("[WARNING] Older in-memory log entries were discarded after the 32 MiB capture limit was reached.\n");
+                result.append("[WARNING] Older in-memory log entries were discarded at the 32 MiB limit.\\n");
             for (const auto& line : m_lines)
                 result.append(line);
             return result;
@@ -112,9 +160,65 @@ namespace NativeEmulation
         std::mutex m_mutex;
         std::deque<std::string> m_lines;
         fs::path m_persistentPath;
+        fs::path m_previousPath;
         std::ofstream m_file;
         size_t m_totalBytes = 0;
+        uint64 m_fileBytes = 0;
         bool m_wasTrimmed = false;
+        std::string m_fileError;
+
+        void AppendFileIfPresent(const fs::path& path, std::string& output)
+        {
+            if (path.empty())
+                return;
+            std::ifstream input(path, std::ios::binary);
+            if (input.is_open())
+                output.append(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        }
+
+        void RotateExistingFile()
+        {
+            std::error_code error;
+            if (fs::exists(m_previousPath, error))
+            {
+                error.clear();
+                fs::remove(m_previousPath, error);
+            }
+            error.clear();
+            fs::rename(m_persistentPath, m_previousPath, error);
+            if (error)
+            {
+                m_fileError = fmt::format("log rotation failed: {}", error.message());
+                error.clear();
+                fs::remove(m_persistentPath, error);
+            }
+            m_fileBytes = 0;
+        }
+
+        void RotateIfNeeded(size_t incomingBytes)
+        {
+            if (m_fileBytes + incomingBytes <= kMaxBytes)
+                return;
+
+            if (m_file.is_open())
+                m_file.close();
+            RotateExistingFile();
+            m_file.clear();
+            m_file.open(m_persistentPath, std::ios::out | std::ios::trunc | std::ios::binary);
+            if (!m_file.is_open())
+            {
+                m_fileError = "cannot reopen diagnostic log after rotation";
+                return;
+            }
+
+            const std::string marker = "===== Previous diagnostic segment rotated; older entries are in .previous =====\\n";
+            m_file.write(marker.data(), static_cast<std::streamsize>(marker.size()));
+            m_file.flush();
+            if (m_file)
+                m_fileBytes = marker.size();
+            else
+                m_fileError = "failed to write log rotation marker";
+        }
     };
 
     const std::chrono::steady_clock::time_point AndroidLogCapture::s_startTime = std::chrono::steady_clock::now();
@@ -125,17 +229,17 @@ namespace NativeEmulation
     {
         std::string report;
         report.reserve(1024 * 1024);
-        report.append("Cemu Android Vulkan diagnostic report\n");
-        report.append("=======================================\n");
-        report.append("Capture: persistent Cemu native log; entries are flushed to app-private storage as they are emitted.\n");
-        report.append("Capture limit: 32 MiB; if exceeded, the oldest entries are removed and this is reported below.\n");
+        report.append("Cemu Android diagnostic report\\n");
+        report.append("===============================\\n");
+        report.append("Capture source: Cemu native LoggingCallbacks (not Android-wide Logcat).\\n");
+        report.append("Persistent log: app-private vulkan-diagnostic.log with one rotated .previous segment.\\n");
+        report.append("Each active/previous segment is bounded to 32 MiB; export combines both when available.\\n");
         report.append("Vulkan validation requested: ");
-        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\n" : "no\n");
-        report.append("Actual validation-layer and debug-messenger initialization status is recorded in the session log below.\n");
-        report.append("The file is append-only across app restarts so diagnostics survive an app crash.\n\n");
+        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\\n" : "no\\n");
+        report.append("Check session entries for actual validation-layer and debug-messenger initialization status.\\n\\n");
         report.append(s_androidLogCapture.Snapshot());
-        if (report.back() != '\n')
-            report.push_back('\n');
+        if (report.empty() || report.back() != '\\n')
+            report.push_back('\\n');
         return report;
     }
 
