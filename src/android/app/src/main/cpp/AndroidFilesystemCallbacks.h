@@ -5,33 +5,21 @@
 
 class AndroidFilesystemCallbacks : public FilesystemAndroid::FilesystemCallbacks
 {
-	jmethodID m_openContentUriMid;
-	jmethodID m_listFilesMid;
-	jmethodID m_isDirectoryMid;
-	jmethodID m_isFileMid;
-	jmethodID m_existsMid;
-	JNIUtils::Scopedjclass m_fileUtilClass;
+    jmethodID m_openContentUriMid = nullptr;
+    jmethodID m_listFilesMid = nullptr;
+    jmethodID m_isDirectoryMid = nullptr;
+    jmethodID m_isFileMid = nullptr;
+    jmethodID m_existsMid = nullptr;
+    JNIUtils::Scopedjclass m_fileUtilClass;
 
-	inline bool CallBooleanFunction(const std::filesystem::path& uri, jmethodID methodId)
-	{
-		bool result = false;
-		JNIUtils::FiberSafeJNICall([&](JNIEnv* env) {
-			jstring uriString = JNIUtils::ToJString(env, uri);
-			result = env->CallStaticBooleanMethod(*m_fileUtilClass, methodId, uriString);
-			env->DeleteLocalRef(uriString);
-		});
-		return result;
-	}
+    bool CallBooleanFunction(const std::filesystem::path& uri, jmethodID methodId, const char* operation);
 
   public:
-	AndroidFilesystemCallbacks();
+    AndroidFilesystemCallbacks();
 
-	int OpenContentUri(const std::filesystem::path& uri) override;
-
-	std::vector<std::filesystem::path> ListFiles(const std::filesystem::path& uri) override;
-	bool IsDirectory(const std::filesystem::path& uri) override;
-
-	bool IsFile(const std::filesystem::path& uri) override;
-
-	bool Exists(const std::filesystem::path& uri) override;
+    int OpenContentUri(const std::filesystem::path& uri) override;
+    std::vector<std::filesystem::path> ListFiles(const std::filesystem::path& uri) override;
+    bool IsDirectory(const std::filesystem::path& uri) override;
+    bool IsFile(const std::filesystem::path& uri) override;
+    bool Exists(const std::filesystem::path& uri) override;
 };
