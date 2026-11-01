@@ -71,6 +71,11 @@ void cemuLog_clearCallbacks()
 	s_loggingDispatcher.clearCallbacks();
 }
 
+void cemuLog_dispatchCrashText(std::string_view text)
+{
+	s_loggingDispatcher.Log(text);
+}
+
 struct _LogContext
 {
 	std::condition_variable_any log_condition;
