@@ -5,9 +5,7 @@ FileStreamSAF* FileStreamSAF::OpenFile(const fs::path& path)
 {
 	auto fileStream = new FileStreamSAF(path);
 	if (fileStream->m_isValid)
-	{
 		return fileStream;
-	}
 
 	delete fileStream;
 	return nullptr;
@@ -17,18 +15,40 @@ void FileStreamSAF::SetPosition(uint64 pos)
 {
 	if (!m_isValid)
 		return;
-	m_stream.seekg((std::streampos)pos);
+
+	// A short read sets eofbit/failbit. Clear it before seeking so a later
+	// random-access read (common when loading archives) can recover.
+	m_stream.clear();
+	m_stream.seekg(static_cast<std::streamoff>(pos), std::ios::beg);
 }
 
 uint64 FileStreamSAF::GetSize()
 {
-	cemu_assert(m_isValid);
+	if (!m_isValid)
+		return 0;
+
+	// Preserve the current offset and recover from a previous EOF/short read.
+	m_stream.clear();
 	auto currentPos = m_stream.tellg();
+	if (currentPos == std::streampos(-1))
+		currentPos = std::streampos(0);
+
+	m_stream.clear();
 	m_stream.seekg(0, std::ios::end);
+	if (!m_stream)
+	{
+		m_stream.clear();
+		m_stream.seekg(currentPos, std::ios::beg);
+		return 0;
+	}
+
 	auto fileSize = m_stream.tellg();
+	m_stream.clear();
 	m_stream.seekg(currentPos, std::ios::beg);
-	uint64 fs = (uint64)fileSize;
-	return fs;
+	if (fileSize == std::streampos(-1))
+		return 0;
+
+	return static_cast<uint64>(fileSize);
 }
 
 bool FileStreamSAF::SetEndOfFile()
@@ -40,17 +60,35 @@ void FileStreamSAF::extract(std::vector<uint8>& data)
 {
 	if (!m_isValid)
 		return;
-	uint64 fileSize = GetSize();
+
+	const uint64 fileSize = GetSize();
+	if (fileSize > static_cast<uint64>(std::numeric_limits<size_t>::max()))
+		return;
+
 	SetPosition(0);
-	data.resize(fileSize);
-	readData(data.data(), fileSize);
+	data.resize(static_cast<size_t>(fileSize));
+	uint64 totalRead = 0;
+	while (totalRead < fileSize)
+	{
+		const uint32 chunkSize = static_cast<uint32>(std::min<uint64>(fileSize - totalRead, 1024 * 1024));
+		const uint32 bytesRead = readData(data.data() + totalRead, chunkSize);
+		if (bytesRead == 0)
+		{
+			data.resize(static_cast<size_t>(totalRead));
+			break;
+		}
+		totalRead += bytesRead;
+	}
 }
 
 uint32 FileStreamSAF::readData(void* data, uint32 length)
 {
-	m_stream.read((char*)data, length);
-	size_t bytesRead = m_stream.gcount();
-	return (uint32)bytesRead;
+	if (!m_isValid || length == 0)
+		return 0;
+
+	m_stream.read(static_cast<char*>(data), static_cast<std::streamsize>(length));
+	const auto bytesRead = m_stream.gcount();
+	return bytesRead > 0 ? static_cast<uint32>(bytesRead) : 0;
 }
 
 bool FileStreamSAF::readU64(uint64& v)
@@ -76,11 +114,11 @@ bool FileStreamSAF::readLine(std::string& line)
 	while (readU8(c))
 	{
 		isEOF = false;
-		if (c == '\r')
+		if (c == '\\r')
 			continue;
-		if (c == '\n')
+		if (c == '\\n')
 			break;
-		line.push_back((char)c);
+		line.push_back(static_cast<char>(c));
 	}
 	return !isEOF;
 }
