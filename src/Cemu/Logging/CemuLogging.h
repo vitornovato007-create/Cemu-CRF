@@ -135,3 +135,5 @@ class LoggingCallbacks
 
 void cemuLog_setCallbacks(LoggingCallbacks* loggingCallbacks);
 void cemuLog_clearCallbacks();
+// Dispatch crash-report text to platform logging callbacks without duplicating it in log.txt.
+void cemuLog_dispatchCrashText(std::string_view text);
