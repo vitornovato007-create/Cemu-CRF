@@ -18,6 +18,7 @@
 #include "Cafe/CafeSystem.h"
 
 #include <boost/container/small_vector.hpp>
+#include <chrono>
 
 void LatteCP_DebugPrintCmdBuffer(uint32be* bufferPtr, uint32 size);
 
@@ -423,6 +424,8 @@ LatteCMDPtr LatteCP_itWaitRegMem(LatteCMDPtr cmd, uint32 nWords)
 	{
 		// wait for memory address
 		performanceMonitor.gpuTime_fenceTime.beginMeasuring();
+		const auto waitStart = std::chrono::steady_clock::now();
+		auto nextWaitDiagnostic = waitStart + std::chrono::seconds(2);
 		while (true)
 		{
 			uint32 fenceMemValue = _swapEndianU32(*fencePtr);
@@ -468,6 +471,18 @@ LatteCMDPtr LatteCP_itWaitRegMem(LatteCMDPtr cmd, uint32 nWords)
 			}
 			else
 				assert_dbg();
+
+			// Preserve guest WAIT_MEM_OP semantics, but report a persistent wait so
+			// Android diagnostics can identify the exact fence blocking the CP.
+			const auto waitNow = std::chrono::steady_clock::now();
+			if (waitNow >= nextWaitDiagnostic)
+			{
+				const auto waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitNow - waitStart).count();
+				cemuLog_log(LogType::Force,
+					"[LatteCP] WAIT_MEM_OP stalled: physAddr={:08x}, compareOp={}, target={:08x}, mask={:08x}, current={:08x}, word0={:08x}, word2={:08x}, word5={:08x}, waitMs={}",
+					physAddr, compareOp, fenceValue, fenceMask, fenceMemValue, word0, word2, word5, waitMs);
+				nextWaitDiagnostic = waitNow + std::chrono::seconds(5);
+			}
 			if (!stalls)
 			{
 				g_renderer->NotifyLatteCommandProcessorIdle();
@@ -577,11 +592,22 @@ LatteCMDPtr LatteCP_itMemSemaphore(LatteCMDPtr cmd, uint32 nWords)
 		// wait
 		LatteCP_signalEnterWait();
 		size_t loopCount = 0;
+		const auto semaphoreWaitStart = std::chrono::steady_clock::now();
+		auto nextSemaphoreDiagnostic = semaphoreWaitStart + std::chrono::seconds(2);
 		while (true)
 		{
 			uint64le oldVal = semaphoreData->load();
 			if (oldVal == 0)
 			{
+				const auto waitNow = std::chrono::steady_clock::now();
+				if (waitNow >= nextSemaphoreDiagnostic)
+				{
+					const auto waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(waitNow - semaphoreWaitStart).count();
+					cemuLog_log(LogType::Force,
+						"[LatteCP] MEM_SEMAPHORE stalled: physAddr={:08x}, control={:08x}, signal={}, value={}, waitMs={}",
+						semaphorePhysicalAddress, semaphoreControl, (uint32)SEM_SIGNAL, (uint64)oldVal, waitMs);
+					nextSemaphoreDiagnostic = waitNow + std::chrono::seconds(5);
+				}
 				loopCount++;
 				if (loopCount > 2000)
 					std::this_thread::yield();
