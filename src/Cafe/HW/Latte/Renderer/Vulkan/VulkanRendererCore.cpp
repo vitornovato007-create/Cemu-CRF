@@ -1,4 +1,5 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+#include <chrono>
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/LatteTextureVk.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/RendererShaderVk.h"
@@ -319,8 +320,11 @@ uint32 VulkanRenderer::uniformData_uploadUniformDataBufferGetOffset(std::span<ui
 	const uint32 uniformSize = ((uint32)data.size() + bufferAlignmentM1) & ~bufferAlignmentM1;
 
 	auto waitWhileCondition = [&](std::function<bool()> condition) {
+		const auto waitStart = std::chrono::steady_clock::now();
+		uint32 waitIterations = 0;
 		while (condition())
 		{
+			++waitIterations;
 			if (m_commandBufferSyncIndex == m_commandBufferIndex)
 			{
 				if (m_cmdBufferUniformRingbufIndices[m_commandBufferIndex] != m_uniformVarBufferReadIndex)
@@ -337,6 +341,15 @@ uint32 VulkanRenderer::uniformData_uploadUniformDataBufferGetOffset(std::span<ui
 				}
 			}
 			WaitForNextFinishedCommandBuffer();
+		}
+		const auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now() - waitStart).count();
+		if (waitDuration >= 10)
+		{
+			cemuLog_log(LogType::Force,
+				"GPU synchronization: uniform ring buffer waited {} ms across {} iterations (read={}, write={}, syncIndex={}, commandIndex={})",
+				waitDuration, waitIterations, m_uniformVarBufferReadIndex, m_uniformVarBufferWriteIndex,
+				m_commandBufferSyncIndex, m_commandBufferIndex);
 		}
 	};
 
