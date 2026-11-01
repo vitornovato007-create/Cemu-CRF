@@ -132,8 +132,13 @@ public:
 	{
 		if (m_threadsActive.exchange(true))
 			return;
-		// create thread pool
+		// Android devices have a tighter CPU/RAM budget. Keep shader compilation
+		// asynchronous, but limit parallel glslang instances to reduce peak memory.
+#if BOOST_OS_ANDROID
+		const uint32 threadCount = 1;
+#else
 		const uint32 threadCount = 2;
+#endif
 		for (uint32 i = 0; i < threadCount; ++i)
 			s_threads.emplace_back(&_ShaderVkThreadPool::CompilerThreadFunc, this);
 	}
@@ -173,10 +178,33 @@ public:
 			cemu_assert_debug(job->m_compilationState.getValue() == RendererShaderVk::COMPILATION_STATE::QUEUED);
 			job->m_compilationState.setValue(RendererShaderVk::COMPILATION_STATE::COMPILING);
 			s_compilationQueueMutex.unlock();
-			// compile
-			job->CompileInternal(false);
-			++g_compiled_shaders_async;
-			// mark as compiled
+			// Compile jobs must never let an exception escape a std::thread:
+			// an uncaught exception here calls std::terminate and closes the app.
+			const auto compileStart = std::chrono::steady_clock::now();
+			const size_t sourceBytes = job->m_glslCode.size();
+			cemuLog_log(LogType::Force, "[Shader async] begin type={} hash={:016x}_{:016x} sourceBytes={}",
+				(uint32)job->m_type, job->m_baseHash, job->m_auxHash, sourceBytes);
+			try
+			{
+				job->CompileInternal(false);
+				++g_compiled_shaders_async;
+			}
+			catch (const std::exception& e)
+			{
+				cemuLog_log(LogType::Force, "[Shader async] EXCEPTION type={} hash={:016x}_{:016x}: {}",
+					(uint32)job->m_type, job->m_baseHash, job->m_auxHash, e.what());
+			}
+			catch (...)
+			{
+				cemuLog_log(LogType::Force, "[Shader async] UNKNOWN EXCEPTION type={} hash={:016x}_{:016x}",
+					(uint32)job->m_type, job->m_baseHash, job->m_auxHash);
+			}
+			const auto compileMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - compileStart).count();
+			cemuLog_log(LogType::Force, "[Shader async] end type={} hash={:016x}_{:016x} durationMs={} moduleCreated={}",
+				(uint32)job->m_type, job->m_baseHash, job->m_auxHash, compileMs,
+				job->m_shader_module != VK_NULL_HANDLE);
+			// Always release waiters, including when compilation threw an exception.
 			cemu_assert_debug(job->m_compilationState.getValue() == RendererShaderVk::COMPILATION_STATE::COMPILING);
 			job->m_compilationState.setValue(RendererShaderVk::COMPILATION_STATE::DONE);
 		}
