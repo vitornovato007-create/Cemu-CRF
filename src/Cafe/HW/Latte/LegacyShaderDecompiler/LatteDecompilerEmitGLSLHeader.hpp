@@ -380,6 +380,14 @@ namespace LatteDecompiler
 			if (psInputIndex == -1)
 				continue; // no ps input
 
+			// A malformed/duplicated semantic mapping must not emit two interface
+			// variables at the same Vulkan location.
+			if (activePassParams.at(psInputIndex))
+			{
+				cemuLog_log(LogType::Force, "[GLSL] Duplicate vertex output semantic {} maps to location {}; declaration skipped",
+					vsSemanticId, psInputIndex);
+				continue;
+			}
 			activePassParams.at(psInputIndex) = true;
 
 			src->addFmt("layout(location = {}) ", psInputIndex);
@@ -391,20 +399,26 @@ namespace LatteDecompiler
 			src->addFmt(" vec4 passParameterSem{};" _CRLF, psInputTable->import[psInputIndex].semanticId);
 		}
 
-		// TODO: fix this
-		for (uint32 i = 0; i < 32; i++)
+		// Dummy varyings are a legacy workaround for stage-interface matching.
+		// They conflict with transform-feedback outputs that also require locations.
+		const bool nativeTransformFeedback = shaderContext->analyzer.hasStreamoutEnable &&
+			!shaderContext->options->useTFViaSSBO;
+		if (!nativeTransformFeedback)
 		{
-			if (!activePassParams[i])
-				src->addFmt("layout(location = {0}) out vec4 dummyPassParameterSem{0};" _CRLF, i);
-		}
+			for (uint32 i = 0; i < 32; i++)
+			{
+				if (!activePassParams[i])
+					src->addFmt("layout(location = {0}) out vec4 dummyPassParameterSem{0};" _CRLF, i);
+			}
 
-		src->add("void dummyPassParamInit() {" _CRLF);
-		for (uint32 i = 0; i < 32; i++)
-		{
-			if (!activePassParams[i])
-				src->addFmt("dummyPassParameterSem{} = vec4(0.0, 0.0, 0.0, 0.0);" _CRLF, i);
+			src->add("void dummyPassParamInit() {" _CRLF);
+			for (uint32 i = 0; i < 32; i++)
+			{
+				if (!activePassParams[i])
+					src->addFmt("dummyPassParameterSem{} = vec4(0.0, 0.0, 0.0, 0.0);" _CRLF, i);
+			}
+			src->add("}" _CRLF);
 		}
-		src->add("}" _CRLF);
 	}
 
 	void _emitPSImports(LatteDecompilerShaderContext* shaderContext)
@@ -482,6 +496,7 @@ namespace LatteDecompiler
 			if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry)
 			{
 				// parameters shared between geometry and pixel shader
+				std::array<bool, 128> emittedG2PLocations{};
 				uint32 ringItemSize = decompilerContext->contextRegisters[mmSQ_GSVS_RING_ITEMSIZE] & 0x7FFF;
 				if ((ringItemSize & 0xF) != 0)
 					debugBreakpoint();
@@ -492,7 +507,14 @@ namespace LatteDecompiler
 				{
 					if (decompilerContext->parsedGSCopyShader->paramMapping[p].exportType != 2)
 						continue;
-					src->addFmt("layout(location = {}) out vec4 passG2PParameter{};" _CRLF, decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F, (sint32)decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam);
+					const uint32 location = decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F;
+					if (emittedG2PLocations[location])
+					{
+						cemuLog_log(LogType::Force, "[GLSL] Duplicate geometry output location {}; declaration skipped", location);
+						continue;
+					}
+					emittedG2PLocations[location] = true;
+					src->addFmt("layout(location = {}) out vec4 passG2PParameter{};" _CRLF, location, (sint32)decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam);
 				}
 			}
 			else if (decompilerContext->shaderType == LatteConst::ShaderType::Pixel)
@@ -548,7 +570,37 @@ namespace LatteDecompiler
 			}
 			else
 			{
-				sint32 locationOffset = 0; // glslang wants a location for xfb outputs
+				sint32 locationOffset = 0; // glslang requires distinct locations for transform-feedback outputs
+				if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex &&
+					!decompilerContext->options->usesGeometryShader)
+				{
+					LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
+					const auto parameterMask = decompilerContext->shader->outputParameterMask;
+					for (uint32 outputIndex = 0; outputIndex < 32; outputIndex++)
+					{
+						if ((parameterMask & (1u << outputIndex)) == 0)
+							continue;
+						const uint32 semanticId = _getVertexShaderOutParamSemanticId(decompilerContext->contextRegisters, outputIndex);
+						if (semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
+							continue;
+						for (sint32 inputIndex = 0; inputIndex < psInputTable->count; inputIndex++)
+						{
+							if (psInputTable->import[inputIndex].semanticId == semanticId)
+							{
+								locationOffset = std::max(locationOffset, inputIndex + 1);
+								break;
+							}
+						}
+					}
+				}
+				else if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry)
+				{
+					for (uint32 location = 0; location < emittedG2PLocations.size(); location++)
+					{
+						if (emittedG2PLocations[location])
+							locationOffset = std::max(locationOffset, static_cast<sint32>(location + 1));
+					}
+				}
 				for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
 				{
 					if (!decompilerContext->output->streamoutBufferWriteMask[i])
