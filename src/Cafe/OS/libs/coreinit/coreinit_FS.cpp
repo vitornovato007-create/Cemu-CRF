@@ -530,12 +530,16 @@ namespace coreinit
 
 		case FSA_CMD_OPERATION_TYPE::GETCWD:
 		{
-			auto transferSize = fsCmdBlockBody->returnValues.cmdGetCwd.transferSize;
-			if (transferSize < 0 && transferSize > sizeof(fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path))
+			const uint32 transferSize = fsCmdBlockBody->returnValues.cmdGetCwd.transferSize;
+			const size_t responseCapacity = sizeof(fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path);
+			if (fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr.IsNull() || transferSize > responseCapacity)
 			{
-				cemu_assert_error();
+				cemuLog_log(LogType::Force,
+					"FS GETCWD response rejected: destination={}, transferSize={}, capacity={}",
+					fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr.GetMPTR(), transferSize, responseCapacity);
+				break;
 			}
-			memcpy(fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr, fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path, transferSize);
+			memcpy(fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr.GetPtr(), fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path, transferSize);
 			break;
 		}
 
@@ -737,9 +741,30 @@ namespace coreinit
 		FS_RESULT fsStatus = _FSAStatusToFSStatus(fsaStatus);
 
 		// On actual hardware this delegates the processing to the AppIO threads, but for now we just run it directly from the IPC thread
-		FSClientBody_t* client = cmd->fsClientBody;
+		if (!cmd)
+		{
+			cemuLog_log(LogType::Force, "FS response callback received a null command block");
+			osLib_returnFromFunction(hCPU, 0);
+			return;
+		}
+
+		FSClientBody_t* client = cmd->fsClientBody.GetPtr();
+		if (!client)
+		{
+			cemuLog_log(LogType::Force, "FS response callback received a command without a client: cmd={}", static_cast<void*>(cmd));
+			osLib_returnFromFunction(hCPU, 0);
+			return;
+		}
 		FSCmdQueue& cmdQueue = client->fsCmdQueue;
 		FSLockMutex();
+		if (cmdQueue.numCommandsInFlight == 0)
+		{
+			FSUnlockMutex();
+			cemuLog_log(LogType::Force, "FS response callback underflow prevented: cmd={}, operation={}, status={}",
+				static_cast<void*>(cmd), cmd->fsaShimBuffer.operationType.value(), (sint32)iosResult);
+			osLib_returnFromFunction(hCPU, 0);
+			return;
+		}
 		cmdQueue.numCommandsInFlight -= 1;
 		cmdQueue.queueFlags = cmdQueue.queueFlags & ~FSCmdQueue::QUEUE_FLAG::IS_FULL;
 		FSUnlockMutex();
