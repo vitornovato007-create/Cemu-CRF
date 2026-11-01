@@ -47,6 +47,11 @@ namespace NativeEmulation
             }
             line.append(message);
             line.push_back('\n');
+            if (line.size() > kMaxBytes - 1024)
+            {
+                line.resize(kMaxBytes - 1024);
+                line.append("\\n[diagnostic line truncated at capture size limit]\\n");
+            }
 
             std::lock_guard lock(m_mutex);
             m_lines.emplace_back(line);
