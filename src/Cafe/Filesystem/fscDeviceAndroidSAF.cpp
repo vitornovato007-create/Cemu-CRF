@@ -63,8 +63,11 @@ uint32 FSCVirtualFile_AndroidSAF::fscReadData(void* buffer, uint32 size)
 		cemu_assert_suspicious();
 		return 0;
 	}
-	uint32 bytesLeft = (uint32)(m_fileSize - m_seek);
-	bytesLeft = std::min(bytesLeft, 0x7FFFFFFFu);
+	if (m_seek >= m_fileSize)
+		return 0;
+
+	uint64 bytesLeft64 = m_fileSize - m_seek;
+	uint32 bytesLeft = static_cast<uint32>(std::min<uint64>(bytesLeft64, 0x7FFFFFFFu));
 	sint32 bytesToRead = std::min(bytesLeft, size);
 	uint32 bytesRead = m_fs->readData(buffer, bytesToRead);
 	m_seek += bytesRead;
@@ -75,8 +78,12 @@ void FSCVirtualFile_AndroidSAF::fscSetSeek(uint64 seek)
 {
 	if (m_type != FSC_TYPE_FILE)
 		return;
+	if (seek > m_fileSize)
+	{
+		cemuLog_log(LogType::Force, "[Android SAF] Seek beyond end of file: requested={}, size={}", seek, m_fileSize);
+		seek = m_fileSize;
+	}
 	this->m_seek = seek;
-	cemu_assert_debug(seek <= m_fileSize);
 	m_fs->SetPosition(seek);
 }
 
