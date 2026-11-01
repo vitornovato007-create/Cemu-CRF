@@ -8,6 +8,9 @@
 
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
+
+#include <chrono>
+#include <exception>
 #include "util/helpers/helpers.h"
 
 bool s_isLoadingShadersVk{ false };
