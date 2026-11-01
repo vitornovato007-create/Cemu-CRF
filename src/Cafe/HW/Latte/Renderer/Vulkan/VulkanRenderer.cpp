@@ -29,6 +29,7 @@
 #include "Cafe/HW/Latte/Core/LatteTiming.h" // vsync control
 
 #include <cstdint>
+#include <chrono>
 #include <glslang/Public/ShaderLang.h>
 
 #ifndef VK_API_VERSION_MAJOR
@@ -2212,7 +2213,16 @@ void VulkanRenderer::WaitForNextFinishedCommandBuffer()
 {
 	cemu_assert_debug(m_commandBufferSyncIndex != m_commandBufferIndex);
 	// wait on least recently submitted command buffer
+	const auto waitStart = std::chrono::steady_clock::now();
 	VkResult result = vkWaitForFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferSyncIndex], true, UINT64_MAX);
+	const auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::steady_clock::now() - waitStart).count();
+	if (waitDuration >= 250)
+	{
+		cemuLog_log(LogType::Force,
+			"GPU synchronization: vkWaitForFences took {} ms (syncIndex={}, commandIndex={}, result={})",
+			waitDuration, m_commandBufferSyncIndex, m_commandBufferIndex, static_cast<sint32>(result));
+	}
 	if (result == VK_TIMEOUT)
 	{
 		cemuLog_log(LogType::Force, "vkWaitForFences: Returned VK_TIMEOUT on infinite fence");
