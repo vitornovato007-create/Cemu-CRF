@@ -1,6 +1,9 @@
 #include "FileStream_saf.h"
 #include "FilesystemAndroid.h"
 
+#include <algorithm>
+#include <limits>
+
 FileStreamSAF* FileStreamSAF::OpenFile(const fs::path& path)
 {
 	auto fileStream = new FileStreamSAF(path);
