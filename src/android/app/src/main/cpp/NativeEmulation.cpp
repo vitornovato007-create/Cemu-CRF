@@ -63,6 +63,7 @@ namespace NativeEmulation
                 m_wasTrimmed = true;
             }
 
+            bool persisted = false;
             if (m_file.is_open())
             {
                 RotateIfNeeded(line.size());
@@ -71,9 +72,25 @@ namespace NativeEmulation
                     m_file.write(line.data(), static_cast<std::streamsize>(line.size()));
                     m_file.flush();
                     if (m_file)
+                    {
                         m_fileBytes += line.size();
+                        persisted = true;
+                    }
                     else
+                    {
                         m_fileError = "write/flush failed";
+                    }
+                }
+            }
+            if (!persisted)
+            {
+                m_unpersistedLines.emplace_back(line);
+                m_unpersistedBytes += line.size();
+                while (m_unpersistedBytes > kMaxBytes && !m_unpersistedLines.empty())
+                {
+                    m_unpersistedBytes -= m_unpersistedLines.front().size();
+                    m_unpersistedLines.pop_front();
+                    m_unpersistedWasTrimmed = true;
                 }
             }
         }
@@ -143,6 +160,14 @@ namespace NativeEmulation
 
             if (!result.empty())
             {
+                if (!m_unpersistedLines.empty())
+                {
+                    result.append("\n===== Recent entries not confirmed on disk =====\n");
+                    for (const auto& line : m_unpersistedLines)
+                        result.append(line);
+                }
+                if (m_unpersistedWasTrimmed)
+                    result.append("\n[WARNING] Some entries that could not be persisted were discarded at the 32 MiB recovery limit.\n");
                 if (!m_fileError.empty())
                     result.append("\n[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\n");
                 return result;
@@ -168,8 +193,11 @@ namespace NativeEmulation
         fs::path m_previousPath;
         std::ofstream m_file;
         size_t m_totalBytes = 0;
+        size_t m_unpersistedBytes = 0;
+        std::deque<std::string> m_unpersistedLines;
         uint64 m_fileBytes = 0;
         bool m_wasTrimmed = false;
+        bool m_unpersistedWasTrimmed = false;
         std::string m_fileError;
 
         void AppendFileIfPresent(const fs::path& path, std::string& output)
