@@ -9,6 +9,8 @@
 namespace TCL
 {
 	SysAllocator<coreinit::OSEvent> s_updateRetirementEvent;
+	// TCL has one global producer ring. Serialize submissions from different PPC cores.
+	std::mutex s_tclSubmitMutex;
 	uint64 s_currentRetireMarker = 0;
 
 	struct TCLStatePPC // mapped into PPC space
@@ -177,29 +179,38 @@ namespace TCL
 
 	int TCLSubmitToRing(uint32be* cmd, uint32 cmdLen, betype<TCLSubmissionFlag>* controlFlags, uint64be* timestampValueOut)
 	{
-		TCLSubmissionFlag flags = *controlFlags;
-		cemu_assert_debug(timestampValueOut); // handle case where this is null
+		if (!controlFlags || !timestampValueOut || (cmdLen != 0 && !cmd))
+		{
+			cemuLog_log(LogType::Force, "[TCL] Rejecting invalid submission arguments: cmd={}, words={}, flags={}, timestampOut={}",
+				static_cast<const void*>(cmd), cmdLen, controlFlags != nullptr, timestampValueOut != nullptr);
+			return -1;
+		}
 
-		// make sure there is enough space to submit all commands at one
-		uint32 totalCommandLength = cmdLen;
-		totalCommandLength += 6; // space needed for TCLSubmitRetireMarker
+		const TCLSubmissionFlag flags = *controlFlags;
+		if (!HAS_FLAG(flags, TCLSubmissionFlag::USE_RETIRED_MARKER))
+		{
+			cemuLog_log(LogType::Force, "[TCL] Submission without USE_RETIRED_MARKER is not implemented");
+			return -1;
+		}
 
+		// The ring and retirement counter are global. Without this lock, concurrent
+		// PPC-core submissions can reserve the same write index and overwrite each other.
+		std::lock_guard<std::mutex> submitLock(s_tclSubmitMutex);
+
+		if (cmdLen > (TCL_RING_BUFFER_SIZE - 1) - 6)
+		{
+			cemuLog_log(LogType::Force, "[TCL] Submission exceeds ring capacity: commandWords={}, markerWords=6, capacity={}",
+				cmdLen, TCL_RING_BUFFER_SIZE - 1);
+			return -1;
+		}
+
+		const uint32 totalCommandLength = cmdLen + 6;
 		if (!TCLWaitForRBSpace(totalCommandLength))
 			return -1;
 
-		// submit command buffer
 		TCLWriteCmd(cmd, cmdLen);
-
-		// create new marker timestamp and tell GPU to write it to our variable after its done processing the command
-		if ((HAS_FLAG(flags, TCLSubmissionFlag::USE_RETIRED_MARKER)))
-		{
-			TCLSubmitRetireMarker(!HAS_FLAG(flags, TCLSubmissionFlag::NO_MARKER_INTERRUPT));
-			*timestampValueOut = s_currentRetireMarker; // incremented before each submit
-		}
-		else
-		{
-			cemu_assert_unimplemented();
-		}
+		TCLSubmitRetireMarker(!HAS_FLAG(flags, TCLSubmissionFlag::NO_MARKER_INTERRUPT));
+		*timestampValueOut = s_currentRetireMarker;
 		return 0;
 	}
 
