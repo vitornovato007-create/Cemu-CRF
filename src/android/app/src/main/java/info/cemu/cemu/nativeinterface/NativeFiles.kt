@@ -57,7 +57,7 @@ object NativeFiles {
                 return fd
             }
         } catch (e: Exception) {
-            Log.d("NativeFiles", "Cannot open content uri, error: ${e.message}")
+            Log.e("NativeFiles", "Cannot open content uri", e)
         }
         return -1
     }
@@ -87,7 +87,7 @@ object NativeFiles {
                 }
             }
         } catch (e: Exception) {
-            Log.d("NativeFiles", "Cannot list files: ${e.message}")
+            Log.e("NativeFiles", "Cannot list files", e)
         }
         var filesArray = arrayOfNulls<String>(files.size)
         filesArray = files.toArray(filesArray)
@@ -97,10 +97,13 @@ object NativeFiles {
     @Keep
     @JvmStatic
     fun isDirectory(uri: String): Boolean {
-        val mimeType = contentResolver.getType(
-            uri.fromNativePath()
-        )
-        return DocumentsContract.Document.MIME_TYPE_DIR == mimeType
+        return try {
+            val mimeType = contentResolver.getType(uri.fromNativePath())
+            DocumentsContract.Document.MIME_TYPE_DIR == mimeType
+        } catch (e: Exception) {
+            Log.e("NativeFiles", "Failed checking directory type", e)
+            false
+        }
     }
 
     @Keep
@@ -117,7 +120,7 @@ object NativeFiles {
                 return cursor != null && cursor.moveToFirst()
             }
         } catch (e: Exception) {
-            Log.d("NativeFiles", "Failed checking if file exists: ${e.message}")
+            Log.e("NativeFiles", "Failed checking if file exists", e)
             return false
         }
     }
