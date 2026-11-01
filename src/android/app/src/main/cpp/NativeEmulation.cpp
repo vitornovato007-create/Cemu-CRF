@@ -505,7 +505,7 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_getVulkanDiagnosticLog(JNIEn
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_setVulkanValidationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
 {
-    uint64 flags = s_loggingFlagMask;
+    uint64 flags = s_loggingFlagMask.load(std::memory_order_relaxed);
     const uint64 validationFlag = cemuLog_getFlag(LogType::VulkanValidation);
     if (enabled)
         flags |= validationFlag;
