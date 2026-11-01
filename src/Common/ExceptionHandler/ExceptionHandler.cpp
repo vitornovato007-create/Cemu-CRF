@@ -5,6 +5,7 @@
 #include "Cafe/HW/Espresso/PPCState.h"
 #include "Cafe/HW/Espresso/Debugger/GDBStub.h"
 #include "ExceptionHandler.h"
+#include "Cemu/Logging/CemuLogging.h"
 
 bool crashLogCreated = false;
 
