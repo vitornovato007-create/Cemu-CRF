@@ -42,7 +42,7 @@ AndroidFilesystemCallbacks::AndroidFilesystemCallbacks()
 int AndroidFilesystemCallbacks::OpenContentUri(const std::filesystem::path& uri)
 {
     int fd = -1;
-    if (!m_fileUtilClass || !m_openContentUriMid)
+    if (!*m_fileUtilClass || !m_openContentUriMid)
     {
         cemuLog_log(LogType::Force, "Android SAF: openContentUri unavailable");
         return fd;
@@ -65,7 +65,7 @@ int AndroidFilesystemCallbacks::OpenContentUri(const std::filesystem::path& uri)
 std::vector<std::filesystem::path> AndroidFilesystemCallbacks::ListFiles(const std::filesystem::path& uri)
 {
     std::vector<std::filesystem::path> paths;
-    if (!m_fileUtilClass || !m_listFilesMid)
+    if (!*m_fileUtilClass || !m_listFilesMid)
     {
         cemuLog_log(LogType::Force, "Android SAF: listFiles unavailable");
         return paths;
@@ -118,7 +118,7 @@ std::vector<std::filesystem::path> AndroidFilesystemCallbacks::ListFiles(const s
 bool AndroidFilesystemCallbacks::CallBooleanFunction(const std::filesystem::path& uri, jmethodID methodId, const char* operation)
 {
     bool result = false;
-    if (!m_fileUtilClass || !methodId)
+    if (!*m_fileUtilClass || !methodId)
     {
         cemuLog_log(LogType::Force, "Android SAF: {} unavailable", operation);
         return result;
