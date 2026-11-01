@@ -593,12 +593,14 @@ namespace LatteDecompiler
 						}
 					}
 				}
-				else if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry)
+				else if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry &&
+					decompilerContext->parsedGSCopyShader)
 				{
-					for (uint32 location = 0; location < emittedG2PLocations.size(); location++)
+					for (sint32 p = 0; p < decompilerContext->parsedGSCopyShader->numParam; p++)
 					{
-						if (emittedG2PLocations[location])
-							locationOffset = std::max(locationOffset, static_cast<sint32>(location + 1));
+						if (decompilerContext->parsedGSCopyShader->paramMapping[p].exportType == 2)
+							locationOffset = std::max(locationOffset,
+								static_cast<sint32>((decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F) + 1));
 					}
 				}
 				for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
