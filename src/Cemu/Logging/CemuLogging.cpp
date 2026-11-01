@@ -11,7 +11,7 @@
 
 #include <fmt/printf.h>
 
-uint64 s_loggingFlagMask = cemuLog_getFlag(LogType::Force);
+std::atomic<uint64> s_loggingFlagMask{cemuLog_getFlag(LogType::Force)};
 
 class LoggingDispatcher
 {
@@ -268,5 +268,5 @@ std::unique_lock<decltype(LogContext.log_mutex)> cemuLog_acquire()
 
 void cemuLog_setActiveLoggingFlags(uint64 flagMask)
 {
-	s_loggingFlagMask = flagMask | cemuLog_getFlag(LogType::Force);
+	s_loggingFlagMask.store(flagMask | cemuLog_getFlag(LogType::Force), std::memory_order_relaxed);
 }
