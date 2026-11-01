@@ -1,6 +1,8 @@
 #pragma once
 
-extern uint64 s_loggingFlagMask;
+#include <atomic>
+
+extern std::atomic<uint64> s_loggingFlagMask;
 
 enum class LogType : sint32
 {
@@ -71,7 +73,7 @@ inline uint64 cemuLog_getFlag(LogType type)
 
 inline bool cemuLog_isLoggingEnabled(LogType type)
 {
-	return (s_loggingFlagMask & cemuLog_getFlag(type)) != 0;
+	return (s_loggingFlagMask.load(std::memory_order_relaxed) & cemuLog_getFlag(type)) != 0;
 }
 
 bool cemuLog_log(LogType type, std::string_view text);
