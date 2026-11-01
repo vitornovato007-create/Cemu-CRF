@@ -359,7 +359,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		cemuLog_log(LogType::Force, "[Shader GLSL] Parsing failed for {:016x}_{:016x}: {}", m_baseHash, m_auxHash, Shader.getInfoLog());
 		// Log the exact generated source only for failed shaders so the persistent
 		// Android diagnostic capture can identify the conflicting interface declarations.
-		cemuLog_log(LogType::Force, "[Shader GLSL] Failed source {:016x}_{:016x} ({} bytes):\\n{}",
+		cemuLog_log(LogType::Force, "[Shader GLSL] Failed source {:016x}_{:016x} ({} bytes):\n{}",
 			m_baseHash, m_auxHash, m_glslCode.size(), m_glslCode);
 		cemu_assert_debug(false);
 		FinishCompilation();
