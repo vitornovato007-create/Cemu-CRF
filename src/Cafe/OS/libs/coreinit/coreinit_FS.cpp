@@ -613,9 +613,33 @@ namespace coreinit
 
 	void __FSQueueCmd(FSCmdQueue* cmdQueue, FSCmdBlockBody* fsCmdBlockBody, MPTR finishCmdFunc)
 	{
-		fsCmdBlockBody->cmdFinishFuncMPTR = finishCmdFunc;
+		if (!cmdQueue || !fsCmdBlockBody)
+		{
+			cemuLog_log(LogType::Force, "FS queue rejected a null queue or command block");
+			return;
+		}
+
 		FSLockMutex();
+		const uint32 currentStatus = _swapEndianU32(fsCmdBlockBody->statusCode);
+		if (currentStatus != FSA_CMD_STATUS_CODE_D900A21 &&
+			currentStatus != FSA_CMD_STATUS_CODE_D900A24)
+		{
+			FSUnlockMutex();
+			cemuLog_log(LogType::Force,
+				"FS duplicate/busy command submission rejected: cmd={}, status={:08x}, operation={}",
+				static_cast<void*>(fsCmdBlockBody), currentStatus,
+				fsCmdBlockBody->fsaShimBuffer.operationType.value());
+			cemu_assert_debug(false);
+			return;
+		}
+
+		// Reserve the command block while holding the global FS lock. A second
+		// concurrent submission of the same FSCmdBlockBody will observe QUEUED
+		// and cannot insert the same intrusive-list node twice.
 		fsCmdBlockBody->statusCode = _swapEndianU32(FSA_CMD_STATUS_CODE_D900A22);
+		fsCmdBlockBody->cmdFinishFuncMPTR = finishCmdFunc;
+		fsCmdBlockBody->next = nullptr;
+		fsCmdBlockBody->previous = nullptr;
 		__FSQueueCmdByPriority(cmdQueue, fsCmdBlockBody, true);
 		FSUnlockMutex();
 		__FSUpdateQueue(cmdQueue);
