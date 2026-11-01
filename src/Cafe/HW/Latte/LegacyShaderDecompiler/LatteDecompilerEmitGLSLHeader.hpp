@@ -521,11 +521,18 @@ namespace LatteDecompiler
 			{
 				// pixel shader with geometry shader
 				LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
+				std::array<bool, 128> emittedG2PInputLocations{};
 				for (sint32 i = 0; i < psInputTable->count; i++)
 				{
 					if (psInputTable->import[i].semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
 						continue;
 					uint32 location = psInputTable->import[i].semanticId & 0x7F; // todo - the range above 128 has special meaning?
+					if (emittedG2PInputLocations[location])
+					{
+						cemuLog_log(LogType::Force, "[GLSL] Duplicate pixel input location {}; declaration skipped", location);
+						continue;
+					}
+					emittedG2PInputLocations[location] = true;
 
 					src->addFmt("layout(location = {}) ", location);
 					if (psInputTable->import[i].isFlat)
