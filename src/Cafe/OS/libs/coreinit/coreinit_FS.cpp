@@ -435,19 +435,28 @@ namespace coreinit
 
 	FSCmdBlockBody* __FSTakeCommandFromQueue(FSCmdQueue* cmdQueue)
 	{
-		if (!cmdQueue->first)
+		if (!cmdQueue || !cmdQueue->first)
 			return nullptr;
-		// dequeue cmd
+
+		// Keep the next entry before detaching the current command. Clearing
+		// dequeuedCmd->next first would make the following link impossible to
+		// repair, leaving the new queue head pointing backwards to a stale node.
 		FSCmdBlockBody* dequeuedCmd = cmdQueue->first;
-		if (cmdQueue->first == cmdQueue->last)
-			cmdQueue->last = nullptr;
-		cmdQueue->first = dequeuedCmd->next;
-		dequeuedCmd->next = nullptr;
-		if (dequeuedCmd->next)
+		FSCmdBlockBody* nextCmd = dequeuedCmd->next.GetPtr();
+
+		cmdQueue->first = nextCmd;
+		if (nextCmd)
 		{
-			FSCmdBlockBody* fsCmdBodyNext = dequeuedCmd->next;
-			fsCmdBodyNext->previous = nullptr;
+			nextCmd->previous = nullptr;
 		}
+		else
+		{
+			cmdQueue->last = nullptr;
+		}
+
+		// The detached command must no longer retain links into the live queue.
+		dequeuedCmd->next = nullptr;
+		dequeuedCmd->previous = nullptr;
 		return dequeuedCmd;
 	}
 
