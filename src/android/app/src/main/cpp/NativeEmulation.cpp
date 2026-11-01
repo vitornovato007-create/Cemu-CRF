@@ -46,7 +46,7 @@ namespace NativeEmulation
                 line.append("] ");
             }
             line.append(message);
-            line.push_back('\\n');
+            line.push_back('\n');
 
             std::lock_guard lock(m_mutex);
             m_lines.emplace_back(line);
@@ -112,7 +112,7 @@ namespace NativeEmulation
                 return;
             }
 
-            const std::string session = "\\n===== Android diagnostic capture session started =====\\n";
+            const std::string session = "\n===== Android diagnostic capture session started =====\n";
             RotateIfNeeded(session.size());
             if (m_file.is_open())
             {
@@ -139,16 +139,16 @@ namespace NativeEmulation
             if (!result.empty())
             {
                 if (!m_fileError.empty())
-                    result.append("\\n[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\\n");
+                    result.append("\n[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\n");
                 return result;
             }
 
             result.reserve(m_totalBytes + 256);
-            result.append("Persistent log file unavailable; showing bounded in-memory capture only.\\n");
+            result.append("Persistent log file unavailable; showing bounded in-memory capture only.\n");
             if (!m_fileError.empty())
-                result.append("[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\\n");
+                result.append("[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\n");
             if (m_wasTrimmed)
-                result.append("[WARNING] Older in-memory log entries were discarded at the 32 MiB limit.\\n");
+                result.append("[WARNING] Older in-memory log entries were discarded at the 32 MiB limit.\n");
             for (const auto& line : m_lines)
                 result.append(line);
             return result;
@@ -211,7 +211,7 @@ namespace NativeEmulation
                 return;
             }
 
-            const std::string marker = "===== Previous diagnostic segment rotated; older entries are in .previous =====\\n";
+            const std::string marker = "===== Previous diagnostic segment rotated; older entries are in .previous =====\n";
             m_file.write(marker.data(), static_cast<std::streamsize>(marker.size()));
             m_file.flush();
             if (m_file)
@@ -229,17 +229,17 @@ namespace NativeEmulation
     {
         std::string report;
         report.reserve(1024 * 1024);
-        report.append("Cemu Android diagnostic report\\n");
-        report.append("===============================\\n");
-        report.append("Capture source: Cemu native LoggingCallbacks (not Android-wide Logcat).\\n");
-        report.append("Persistent log: app-private vulkan-diagnostic.log with one rotated .previous segment.\\n");
-        report.append("Each active/previous segment is bounded to 32 MiB; export combines both when available.\\n");
+        report.append("Cemu Android diagnostic report\n");
+        report.append("===============================\n");
+        report.append("Capture source: Cemu native LoggingCallbacks (not Android-wide Logcat).\n");
+        report.append("Persistent log: app-private vulkan-diagnostic.log with one rotated .previous segment.\n");
+        report.append("Each active/previous segment is bounded to 32 MiB; export combines both when available.\n");
         report.append("Vulkan validation requested: ");
-        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\\n" : "no\\n");
-        report.append("Check session entries for actual validation-layer and debug-messenger initialization status.\\n\\n");
+        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\n" : "no\n");
+        report.append("Check session entries for actual validation-layer and debug-messenger initialization status.\n\n");
         report.append(s_androidLogCapture.Snapshot());
-        if (report.empty() || report.back() != '\\n')
-            report.push_back('\\n');
+        if (report.empty() || report.back() != '\n')
+            report.push_back('\n');
         return report;
     }
 
