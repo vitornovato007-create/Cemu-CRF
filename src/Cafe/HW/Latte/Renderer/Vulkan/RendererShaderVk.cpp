@@ -196,11 +196,13 @@ public:
 			{
 				cemuLog_log(LogType::Force, "[Shader async] EXCEPTION type={} hash={:016x}_{:016x}: {}",
 					(uint32)job->m_type, job->m_baseHash, job->m_auxHash, e.what());
+				job->FinishCompilation();
 			}
 			catch (...)
 			{
 				cemuLog_log(LogType::Force, "[Shader async] UNKNOWN EXCEPTION type={} hash={:016x}_{:016x}",
 					(uint32)job->m_type, job->m_baseHash, job->m_auxHash);
+				job->FinishCompilation();
 			}
 			const auto compileMs = std::chrono::duration_cast<std::chrono::milliseconds>(
 				std::chrono::steady_clock::now() - compileStart).count();
