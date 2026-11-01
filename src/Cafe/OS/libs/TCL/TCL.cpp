@@ -112,6 +112,7 @@ namespace TCL
 
 		uint32 writeIndex = tclRingBufferA_writeIndex.load(std::memory_order::relaxed);
 		uint32 spinCount = 0;
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
 		while (true)
 		{
 			uint32 readIndex = tclRingBufferA_readIndex.load(std::memory_order::acquire);
@@ -121,11 +122,19 @@ namespace TCL
 			if (distance >= numU32s + 1)
 				return true;
 
+			if (std::chrono::steady_clock::now() >= deadline)
+			{
+				cemuLog_log(LogType::Force,
+					"[TCL] Timed out waiting for command ring space: requestWords={}, readIndex={}, writeIndex={}, freeWords={}",
+					numU32s, readIndex, writeIndex, distance > 0 ? distance - 1 : 0);
+				return false;
+			}
+
 			if (spinCount++ < 256)
 				_mm_pause();
 			else
 			{
-				// Avoid monopolizing a CPU core while the Latte consumer is processing commands.
+				// Yield while waiting so the Latte consumer can run on mobile CPUs.
 				std::this_thread::yield();
 				spinCount = 0;
 			}
