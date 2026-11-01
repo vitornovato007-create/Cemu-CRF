@@ -137,7 +137,7 @@ public:
 			return;
 		// Android devices have a tighter CPU/RAM budget. Keep shader compilation
 		// asynchronous, but limit parallel glslang instances to reduce peak memory.
-#if BOOST_OS_ANDROID
+#if defined(__ANDROID__)
 		const uint32 threadCount = 1;
 #else
 		const uint32 threadCount = 2;
