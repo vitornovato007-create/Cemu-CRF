@@ -4,8 +4,11 @@ on:
     inputs:
       build_type:
         description: Build type
-        required: false
-        type: string
+        required: true
+        type: choice
+        options:
+          - Release
+          - Debug
       version_major:
         description: Version major
         required: false
@@ -41,11 +44,42 @@ jobs:
           EMULATOR_VERSION_MINOR: ${{ inputs.version_minor }}
           BUILD_TYPE: ${{ inputs.build_type }}
         run: |
+          set -euo pipefail
           cd ./src/android
-          base64 --decode <<< "${ANDROID_STORE_FILE_BASE64}" > store.jks
-          export ANDROID_KEYSTORE_FILE=$(pwd)/store.jks
-          ./gradlew assemble$BUILD_TYPE
 
+          BUILD_TYPE_NORMALIZED="$(printf '%s' "${BUILD_TYPE:-Release}" | tr '[:upper:]' '[:lower:]')"
+
+          # Cemu v0.2 disables the standard release variant and defines
+          # a custom "github" variant for distributable APK builds.
+          case "$BUILD_TYPE_NORMALIZED" in
+            release|github)
+              GRADLE_TASK="assembleGithub"
+              ;;
+            debug)
+              GRADLE_TASK="assembleDebug"
+              ;;
+            *)
+              echo "::error::Unsupported build type: $BUILD_TYPE"
+              echo "Use Release or Debug."
+              exit 1
+              ;;
+          esac
+
+          if [[ -n "${ANDROID_STORE_FILE_BASE64:-}" ]]; then
+            if [[ -z "${ANDROID_KEY_STORE_PASSWORD:-}" || -z "${ANDROID_KEY_ALIAS:-}" ]]; then
+              echo "::error::Keystore secret is present but password or alias is missing."
+              exit 1
+            fi
+            printf '%s' "$ANDROID_STORE_FILE_BASE64" | base64 --decode > store.jks
+            export ANDROID_KEYSTORE_FILE="$(pwd)/store.jks"
+          else
+            echo "[INFO] Signing secrets are not configured; building the github variant with the project's debug fallback."
+            unset ANDROID_KEYSTORE_FILE
+          fi
+
+          echo "[INFO] Requested build type: $BUILD_TYPE_NORMALIZED"
+          echo "[INFO] Executing Gradle task: $GRADLE_TASK"
+          ./gradlew "$GRADLE_TASK"
 
       - name: Set version dependent vars
         env:
@@ -58,7 +92,12 @@ jobs:
         run: |
           VERSION=${{ env.CEMU_VERSION }}
           mkdir upload
-          mv ./src/android/app/build/outputs/apk/*/*.apk upload/Cemu-$VERSION.apk
+          APK_PATH=$(find ./src/android/app/build/outputs/apk -type f -name '*.apk' | head -n 1)
+          if [[ -z "$APK_PATH" ]]; then
+            echo "::error::No APK was generated."
+            exit 1
+          fi
+          mv "$APK_PATH" "upload/Cemu-$VERSION.apk"
           wget -O ghr.tar.gz https://github.com/tcnksm/ghr/releases/download/v0.15.0/ghr_v0.15.0_linux_amd64.tar.gz
           tar xvzf ghr.tar.gz; rm ghr.tar.gz
           echo "[INFO] Release tag: v${{ env.CEMU_VERSION }}"
