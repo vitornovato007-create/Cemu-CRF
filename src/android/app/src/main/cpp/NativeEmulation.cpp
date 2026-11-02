@@ -471,7 +471,7 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_supportsLoadingCustomDriver(
 extern "C" [[maybe_unused]] JNIEXPORT jstring JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_getVulkanDiagnosticLog(JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
-    return JNIUtils::ToJString(env, NativeEmulation::GetVulkanDiagnosticLog());
+    return JNIUtils::toJString(env, NativeEmulation::GetVulkanDiagnosticLog());
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
