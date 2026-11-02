@@ -91,20 +91,26 @@ android {
             applicationIdSuffix = ".debug"
         }
         create("github") {
+            // The distributable GitHub APK must always use Release settings.
+            // Signing configuration is independent from the native build type.
+            initWith(getByName("release"))
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
             if (keystoreFilePath != null) {
-                initWith(getByName("release"))
-                isMinifyEnabled = true
-                proguardFiles(
-                    getDefaultProguardFile("proguard-android-optimize.txt"),
-                    "proguard-rules.pro"
-                )
                 signingConfig = signingConfigs.getByName("releaseSigningConfig")
             } else {
-                initWith(getByName("debug"))
-                externalNativeBuild {
-                    cmake {
-                        arguments.add("-DCMAKE_BUILD_TYPE=DEBUG")
-                    }
+                // Keep local/CI builds possible without release secrets, but do
+                // not inherit the Debug build type or Debug native compiler flags.
+                signingConfig = signingConfigs.getByName("debug")
+            }
+
+            externalNativeBuild {
+                cmake {
+                    arguments.add("-DCMAKE_BUILD_TYPE=Release")
                 }
             }
         }
