@@ -1,68 +1,59 @@
 package info.cemu.cemu
 
-import android.app.PendingIntent
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ShortcutInfo
-import android.content.pm.ShortcutManager
-import android.graphics.drawable.Icon
 import android.os.Bundle
-import android.view.KeyEvent
-import android.view.MotionEvent
+import android.provider.DocumentsContract
+import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.documentfile.provider.DocumentFile
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import info.cemu.cemu.about.AboutCemuRoute
 import info.cemu.cemu.about.aboutCemuNavigation
-import info.cemu.cemu.common.input.GamepadInputSource
-import info.cemu.cemu.common.ui.components.ActivityContent
-import info.cemu.cemu.common.ui.localization.TranslatableContent
 import info.cemu.cemu.emulation.EmulationActivity
-import info.cemu.cemu.games.GameListRoute
-import info.cemu.cemu.games.gamesNavigation
+import info.cemu.cemu.gamelist.GameListRoute
+import info.cemu.cemu.gamelist.gameListNavigation
 import info.cemu.cemu.graphicpacks.GraphicPacksRoute
 import info.cemu.cemu.graphicpacks.graphicPacksNavigation
+import info.cemu.cemu.guicore.components.ActivityContent
+import info.cemu.cemu.nativeinterface.NativeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeGameTitles.Game
 import info.cemu.cemu.nativeinterface.NativeSettings
+import info.cemu.cemu.provider.DocumentsProvider
 import info.cemu.cemu.settings.SettingsRoute
 import info.cemu.cemu.settings.settingsNavigation
 import info.cemu.cemu.titlemanager.TitleManagerRoute
 import info.cemu.cemu.titlemanager.titleManagerNavigation
+import java.io.File
 
-class MainActivity : AppCompatActivity() {
-    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        GamepadInputSource.emitMotion(event)
-
-        if (GamepadInputSource.hasMotionSubscribers) {
-            return true
-        }
-
-        return super.dispatchGenericMotionEvent(event)
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        GamepadInputSource.emitKey(event)
-
-        if (GamepadInputSource.hasKeySubscribers) {
-            return true
-        }
-
-        return super.dispatchKeyEvent(event)
-    }
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            TranslatableContent {
-                ActivityContent {
-                    MainNav()
-                }
+            ActivityContent {
+                MainNav()
             }
         }
     }
@@ -78,6 +69,16 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
+private fun startGame(context: Context, game: Game) {
+    Intent(
+        context,
+        EmulationActivity::class.java
+    ).apply {
+        putExtra(EmulationActivity.EXTRA_LAUNCH_PATH, game.path)
+        context.startActivity(this)
+    }
+}
+
 @Composable
 private fun MainNav() {
     val navController = rememberNavController()
@@ -87,16 +88,16 @@ private fun MainNav() {
         navController = navController,
         startDestination = GameListRoute,
         enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None }) {
-        gamesNavigation(
-            navController = navController,
-            startGame = { startGame(context, it) },
-            tryCreateShortcut = { tryCreateShortcutForGame(context, it) },
-            goToSettings = { navController.navigate(SettingsRoute) },
-            goToTitleManager = { navController.navigate(TitleManagerRoute) },
-            goToGraphicPacks = { navController.navigate(GraphicPacksRoute) },
-            goToAboutCemu = { navController.navigate(AboutCemuRoute) },
-        )
+        exitTransition = { ExitTransition.None }
+    ) {
+        gameListNavigation(navController, startGame = { startGame(context, it) }) {
+            GameListToolBarActionsMenu(
+                goToSettings = { navController.navigate(SettingsRoute) },
+                goToTitleManager = { navController.navigate(TitleManagerRoute) },
+                goToGraphicPacks = { navController.navigate(GraphicPacksRoute) },
+                goToAboutCemu = { navController.navigate(AboutCemuRoute) }
+            )
+        }
         settingsNavigation(navController)
         titleManagerNavigation(navController)
         graphicPacksNavigation(navController)
@@ -104,56 +105,106 @@ private fun MainNav() {
     }
 }
 
-private fun createIntentForGame(context: Context, game: Game): Intent {
-    val intent = Intent(
-        context, EmulationActivity::class.java
+@Composable
+private fun GameListToolBarActionsMenu(
+    goToSettings: () -> Unit,
+    goToTitleManager: () -> Unit,
+    goToGraphicPacks: () -> Unit,
+    goToAboutCemu: () -> Unit,
+) {
+    var expandMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    @Composable
+    fun DropdownMenuItem(onClick: () -> Unit, text: String) {
+        DropdownMenuItem(
+            onClick = {
+                onClick()
+                expandMenu = false
+            },
+            text = { Text(text) },
+        )
+    }
+    IconButton(
+        modifier = Modifier.padding(end = 8.dp),
+        onClick = { expandMenu = true },
+    ) {
+        Icon(
+            imageVector = Icons.Filled.MoreVert,
+            contentDescription = stringResource(R.string.more_options)
+        )
+    }
+    DropdownMenu(
+        expanded = expandMenu,
+        onDismissRequest = { expandMenu = false }
+    ) {
+        DropdownMenuItem(
+            onClick = goToSettings,
+            text = stringResource(R.string.settings)
+        )
+        DropdownMenuItem(
+            onClick = goToGraphicPacks,
+            text = stringResource(R.string.graphic_packs)
+        )
+        DropdownMenuItem(
+            onClick = goToTitleManager,
+            text = stringResource(R.string.title_manager)
+        )
+        DropdownMenuItem(
+            onClick = { openCemuFolder(context) },
+            text = stringResource(R.string.open_cemu_folder)
+        )
+        DropdownMenuItem(
+            onClick = { shareLogFile(context) },
+            text = stringResource(R.string.log_file_share_label),
+        )
+        DropdownMenuItem(
+            onClick = goToAboutCemu,
+            text = stringResource(R.string.about_cemu),
+        )
+    }
+}
+
+private fun shareLogFile(context: Context) {
+    val logFileName = "log.txt"
+    val logFile = File(NativeActiveSettings.getUserDataPath()).resolve(logFileName)
+
+    if (!logFile.isFile) {
+        Toast.makeText(context, R.string.log_file_not_available, Toast.LENGTH_LONG).show()
+        return
+    }
+
+    val fileUri = DocumentsContract.buildDocumentUri(
+        DocumentsProvider.AUTHORITY,
+        DocumentsProvider.ROOT_ID + "/$logFileName"
     )
-    intent.action = Intent.ACTION_VIEW
-    intent.putExtra(EmulationActivity.EXTRA_LAUNCH_PATH, game.path)
 
-    return intent
+    val documentFile = DocumentFile.fromSingleUri(context, fileUri) ?: return
+
+    val intent = Intent(Intent.ACTION_SEND)
+        .setDataAndType(documentFile.uri, "text/plain")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .putExtra(Intent.EXTRA_STREAM, documentFile.uri)
+
+    context.startActivity(Intent.createChooser(intent, null))
 }
 
-private fun startGame(context: Context, game: Game) {
-    NativeSettings.saveSettings()
-
-    val intent = createIntentForGame(context, game)
-    context.startActivity(intent)
-}
-
-private fun tryCreateShortcutForGame(
-    context: Context,
-    game: Game,
-): Boolean {
+private fun openCemuFolder(context: Context) {
     try {
-        val shortcutManager = context.getSystemService(
-            ShortcutManager::class.java
+        val intent = Intent(Intent.ACTION_VIEW)
+            .addCategory(Intent.CATEGORY_DEFAULT)
+            .addFlags(
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                        or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+                        or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        intent.data = DocumentsContract.buildRootUri(
+            DocumentsProvider.AUTHORITY,
+            DocumentsProvider.ROOT_ID
         )
-        if (!shortcutManager.isRequestPinShortcutSupported) {
-            return false
-        }
-
-        val icon = game.icon?.asAndroidBitmap().let {
-            if (it != null) Icon.createWithBitmap(it)
-            else Icon.createWithResource(context, R.mipmap.ic_launcher)
-        }
-
-        val intent = createIntentForGame(context, game)
-
-        val pinShortcutInfo =
-            ShortcutInfo.Builder(context, game.titleId.toString()).setShortLabel(game.name!!)
-                .setIntent(intent).setIcon(icon).build()
-
-        val pinnedShortcutCallbackIntent =
-            shortcutManager.createShortcutResultIntent(pinShortcutInfo)
-
-        val successCallback = PendingIntent.getBroadcast(
-            context, 0, pinnedShortcutCallbackIntent, PendingIntent.FLAG_IMMUTABLE
-        )
-
-        shortcutManager.requestPinShortcut(pinShortcutInfo, successCallback.intentSender)
-        return true
-    } catch (_: Exception) {
-        return false
+        context.startActivity(intent)
+    } catch (activityNotFoundException: ActivityNotFoundException) {
+        Toast.makeText(context, R.string.failed_to_open_cemu_folder, Toast.LENGTH_LONG).show()
     }
 }

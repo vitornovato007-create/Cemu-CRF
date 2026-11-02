@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Cafe/IOSU/legacy/iosu_act.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 struct independentServiceToken_t
 {
@@ -31,7 +30,7 @@ namespace act
 	}
 
 	const uint8 ACT_SLOT_CURRENT = 0xFE;
+}
+}
 
-	COSModule* GetModule();
-}
-}
+void nnAct_load();

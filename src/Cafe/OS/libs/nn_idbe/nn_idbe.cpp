@@ -5,7 +5,6 @@
 #include "util/crypto/aes128.h"
 #include "openssl/sha.h"
 #include "Cemu/napi/napi.h"
-#include "config/ActiveSettings.h"
 
 namespace nn
 {
@@ -165,30 +164,15 @@ namespace nn
 			osLib_returnFromFunction(hCPU, 1);
 		}
 
-		// this module is used by:
-		// Daily Log app
-		// Download Manager app
-		// and possibly other system titles?
-
-		class : public COSModule
+		void load()
 		{
-			public:
-			std::string_view GetName() override
-			{
-				return "nn_idbe";
-			}
+			// this module is used by:
+			// Daily Log app
+			// Download Manager app
+			// and possibly other system titles?
 
-			void RPLMapped() override
-			{
-				osLib_addFunction("nn_idbe", "DownloadIconFile__Q2_2nn4idbeFPvULUsb", export_DownloadIconFile);
-				osLib_addFunction("nn_idbe", "DecryptIconFile__Q2_2nn4idbeFPvPCv", export_DecryptIconFile);
-			};
-
-		}s_COSnnIdbeModule;
-
-		COSModule* GetModule()
-		{
-			return &s_COSnnIdbeModule;
+			osLib_addFunction("nn_idbe", "DownloadIconFile__Q2_2nn4idbeFPvULUsb", export_DownloadIconFile);
+			osLib_addFunction("nn_idbe", "DecryptIconFile__Q2_2nn4idbeFPvPCv", export_DecryptIconFile);
 		}
 
 	}

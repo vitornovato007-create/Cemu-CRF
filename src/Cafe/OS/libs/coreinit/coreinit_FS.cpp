@@ -226,33 +226,32 @@ namespace coreinit
 		return clientNum;
 	}
 
-	// Caller must hold s_fsGlobalMutex.
-	bool __FSIsClientRegisteredLocked(FSClientBody_t* fsClientBody)
-	{
-		if (!fsClientBody)
-			return false;
-
-		FSClientBody_t* const first = g_fsRegisteredClientBodies;
-		FSClientBody_t* current = first;
-		while (current)
-		{
-			if (current == fsClientBody)
-				return true;
-
-			current = current->fsClientBodyNext.GetPtr();
-			// The registered-client list may be circular.
-			if (current == first)
-				break;
-		}
-		return false;
-	}
-
 	bool __FSIsClientRegistered(FSClientBody_t* fsClientBody)
 	{
 		FSLockMutex();
-		const bool registered = __FSIsClientRegisteredLocked(fsClientBody);
+		FSClientBody_t* fsClientBodyFirst = g_fsRegisteredClientBodies;
+		FSClientBody_t* fsClientBodyItr = fsClientBodyFirst;
+		if (fsClientBodyItr == NULL)
+		{
+			FSUnlockMutex();
+			return false;
+		}
+		while (true)
+		{
+			if (fsClientBody == fsClientBodyItr)
+			{
+				FSUnlockMutex();
+				return true;
+			}
+			// next
+			fsClientBodyItr = fsClientBodyItr->fsClientBodyNext.GetPtr();
+			if (fsClientBodyItr == MPTR_NULL)
+				break;
+			if (fsClientBodyItr == fsClientBodyFirst)
+				break;
+		}
 		FSUnlockMutex();
-		return registered;
+		return false;
 	}
 
 	void __FSInitCmdQueue(FSCmdQueue* fsCmdQueueBE, MPTR dequeueHandlerFuncMPTR, uint32 numMaxCommandsInFlight)
@@ -294,7 +293,7 @@ namespace coreinit
 				return FS_RESULT::FATAL_ERROR;
 			}
 		}
-		if (__FSIsClientRegisteredLocked(__FSGetClientBody(fsClient)))
+		if (__FSIsClientRegistered(__FSGetClientBody(fsClient)))
 		{
 			FSUnlockMutex();
 			__FSErrorAndBlock("Called FSAddClient(Ex) on client that was already added");
@@ -436,28 +435,19 @@ namespace coreinit
 
 	FSCmdBlockBody* __FSTakeCommandFromQueue(FSCmdQueue* cmdQueue)
 	{
-		if (!cmdQueue || !cmdQueue->first)
+		if (!cmdQueue->first)
 			return nullptr;
-
-		// Keep the next entry before detaching the current command. Clearing
-		// dequeuedCmd->next first would make the following link impossible to
-		// repair, leaving the new queue head pointing backwards to a stale node.
+		// dequeue cmd
 		FSCmdBlockBody* dequeuedCmd = cmdQueue->first;
-		FSCmdBlockBody* nextCmd = dequeuedCmd->next.GetPtr();
-
-		cmdQueue->first = nextCmd;
-		if (nextCmd)
-		{
-			nextCmd->previous = nullptr;
-		}
-		else
-		{
+		if (cmdQueue->first == cmdQueue->last)
 			cmdQueue->last = nullptr;
-		}
-
-		// The detached command must no longer retain links into the live queue.
+		cmdQueue->first = dequeuedCmd->next;
 		dequeuedCmd->next = nullptr;
-		dequeuedCmd->previous = nullptr;
+		if (dequeuedCmd->next)
+		{
+			FSCmdBlockBody* fsCmdBodyNext = dequeuedCmd->next;
+			fsCmdBodyNext->previous = nullptr;
+		}
 		return dequeuedCmd;
 	}
 
@@ -531,16 +521,12 @@ namespace coreinit
 
 		case FSA_CMD_OPERATION_TYPE::GETCWD:
 		{
-			const uint32 transferSize = fsCmdBlockBody->returnValues.cmdGetCwd.transferSize;
-			const size_t responseCapacity = sizeof(fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path);
-			if (fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr.IsNull() || transferSize > responseCapacity)
+			auto transferSize = fsCmdBlockBody->returnValues.cmdGetCwd.transferSize;
+			if (transferSize < 0 && transferSize > sizeof(fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path))
 			{
-				cemuLog_log(LogType::Force,
-					"FS GETCWD response rejected: destination={}, transferSize={}, capacity={}",
-					fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr.GetMPTR(), transferSize, responseCapacity);
-				break;
+				cemu_assert_error();
 			}
-			memcpy(fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr.GetPtr(), fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path, transferSize);
+			memcpy(fsCmdBlockBody->returnValues.cmdGetCwd.pathPtr, fsCmdBlockBody->fsaShimBuffer.response.cmdGetCWD.path, transferSize);
 			break;
 		}
 
@@ -613,15 +599,6 @@ namespace coreinit
 
 	void __FSQueueCmd(FSCmdQueue* cmdQueue, FSCmdBlockBody* fsCmdBlockBody, MPTR finishCmdFunc)
 	{
-		// Keep the original command submission semantics. FS command blocks can
-		// legitimately enter this path with status values beyond the two states
-		// checked by the Android-port duplicate-submission guard.
-		if (!cmdQueue || !fsCmdBlockBody)
-		{
-			cemuLog_log(LogType::Force, "FS queue rejected a null queue or command block");
-			return;
-		}
-
 		fsCmdBlockBody->cmdFinishFuncMPTR = finishCmdFunc;
 		FSLockMutex();
 		fsCmdBlockBody->statusCode = _swapEndianU32(FSA_CMD_STATUS_CODE_D900A22);
@@ -742,39 +719,18 @@ namespace coreinit
 		ppcDefineParamU32(iosResult, 0);
 		ppcDefineParamPtr(cmd, FSCmdBlockBody, 1);
 
-		// On actual hardware this delegates the processing to the AppIO threads, but for now we just run it directly from the IPC thread.
-		// Validate the command pointer before touching any command-block fields.
-		if (!cmd)
-		{
-			cemuLog_log(LogType::Force, "FS response callback received a null command block");
-			osLib_returnFromFunction(hCPU, 0);
-			return;
-		}
-
 		FSA_RESULT fsaStatus = _FSIosErrorToFSAStatus((IOS_ERROR)iosResult);
+
 		cmd->statusCode = _swapEndianU32(FSA_CMD_STATUS_CODE_D900A26);
 		cmd->lastFSAStatus = fsaStatus;
 
 		// translate error code to FSStatus
 		FS_RESULT fsStatus = _FSAStatusToFSStatus(fsaStatus);
 
-		FSClientBody_t* client = cmd->fsClientBody.GetPtr();
-		if (!client)
-		{
-			cemuLog_log(LogType::Force, "FS response callback received a command without a client: cmd={}", static_cast<void*>(cmd));
-			osLib_returnFromFunction(hCPU, 0);
-			return;
-		}
+		// On actual hardware this delegates the processing to the AppIO threads, but for now we just run it directly from the IPC thread
+		FSClientBody_t* client = cmd->fsClientBody;
 		FSCmdQueue& cmdQueue = client->fsCmdQueue;
 		FSLockMutex();
-		if (cmdQueue.numCommandsInFlight == 0)
-		{
-			FSUnlockMutex();
-			cemuLog_log(LogType::Force, "FS response callback underflow prevented: cmd={}, operation={}, status={}",
-				static_cast<void*>(cmd), cmd->fsaShimBuffer.operationType.value(), (sint32)iosResult);
-			osLib_returnFromFunction(hCPU, 0);
-			return;
-		}
 		cmdQueue.numCommandsInFlight -= 1;
 		cmdQueue.queueFlags = cmdQueue.queueFlags & ~FSCmdQueue::QUEUE_FLAG::IS_FULL;
 		FSUnlockMutex();

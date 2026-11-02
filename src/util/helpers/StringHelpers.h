@@ -111,9 +111,9 @@ namespace StringHelpers
 	}
 
 	// convert utf8 string to Wii U big-endian wchar_t string
-	static std::vector<uint16be> FromUtf8(std::string_view str)
+	static std::basic_string<uint16be> FromUtf8(std::string_view str)
 	{
-		std::vector<uint16be> tmpStr;
+		std::basic_string<uint16be> tmpStr;
 		std::wstring w = boost::nowide::widen(str.data(), str.size());
 		for (auto& c : w)
 			tmpStr.push_back((uint16)c);

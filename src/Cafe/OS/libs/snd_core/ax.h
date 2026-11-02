@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Cafe/OS/libs/coreinit/coreinit.h" // for OSThread*
 #include "util/helpers/fspinlock.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 struct PPCInterpreter_t;
 
@@ -77,6 +77,7 @@ namespace snd_core
 	const int AX_FILTER_LOWPASS_12K = 0x1;
 	const int AX_FILTER_LOWPASS_16K = 0x2;
 
+	void loadExports();
 	bool isInitialized();
 	void reset();
 
@@ -240,10 +241,8 @@ namespace snd_core
 	void AXSetVoiceBiquad(AXVPB* vpb, AXPBBIQUAD_t* biquad);
 	void AXSetVoiceBiquadCoefs(AXVPB* vpb, uint16 b0, uint16 b1, uint16 b2, uint16 a1, uint16 a2);
 	void AXSetVoiceOffsets(AXVPB* vpb, AXPBOFFSET_t* pbOffset);
-	void AXSetVoiceOffsetsEx(AXVPB* vpb, AXPBOFFSET_t* pbOffset, void* sampleBase);
 	void AXGetVoiceOffsets(AXVPB* vpb, AXPBOFFSET_t* pbOffset);
 	void AXGetVoiceOffsetsEx(AXVPB* vpb, AXPBOFFSET_t* pbOffset, MPTR sampleBase);
-	void AXSetVoiceSamplesAddr(AXVPB* vpb, void* sampleBase);
 	void AXSetVoiceCurrentOffset(AXVPB* vpb, uint32 currentOffset);
 	void AXSetVoiceLoopOffset(AXVPB* vpb, uint32 loopOffset);
 	void AXSetVoiceEndOffset(AXVPB* vpb, uint32 endOffset);
@@ -252,7 +251,6 @@ namespace snd_core
 	void AXSetVoiceEndOffsetEx(AXVPB* vpb, uint32 endOffset, MPTR sampleBase);
 	uint32 AXGetVoiceCurrentOffsetEx(AXVPB* vpb, MPTR sampleBase);
 	void AXSetVoiceLoop(AXVPB* vpb, uint16 loopState);
-	sint32 AXGetVoiceLoopCount(AXVPB* vpb);
 
 	// AXIst
 
@@ -391,6 +389,5 @@ namespace snd_core
 	void AXOut_reset();
 	void AXOut_update();
 
-	COSModule* GetModuleSndCore1();
-	COSModule* GetModuleSndCore2();
+	void Initialize();
 }

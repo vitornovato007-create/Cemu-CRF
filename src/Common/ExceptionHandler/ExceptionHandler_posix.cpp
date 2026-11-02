@@ -13,11 +13,11 @@
 #include "ELFSymbolTable.h"
 #endif
 
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 #include <boost/stacktrace.hpp>
-#endif
+#endif  // __ANDROID__
 
-#if BOOST_OS_LINUX && !BOOST_PLAT_ANDROID
+#if BOOST_OS_LINUX
 void DemangleAndPrintBacktrace(char** backtrace, size_t size)
 {
 	ELFSymbolTable symTable;
@@ -92,7 +92,7 @@ void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
 		printf("Unknown core dumping signal!\n");
 	}
     CrashLog_WriteLine(fmt::format("Error: signal {}:", sig));
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
     CrashLog_WriteLine(to_string(boost::stacktrace::stacktrace()));
 #else
 	void* backtraceArray[128];
@@ -121,7 +121,7 @@ void handlerDumpingSignal(int sig, siginfo_t *info, void *context)
 #else
 	backtrace_symbols_fd(backtraceArray, size, STDERR_FILENO);
 #endif
-#endif
+#endif // __ANDROID__
 
     std::cerr << fmt::format("\nStacktrace and additional info written to:") << std::endl;
     std::cerr << cemuLog_GetLogFilePath().generic_string() << std::endl;

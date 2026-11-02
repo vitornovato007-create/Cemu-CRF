@@ -83,15 +83,6 @@ add_library(CemuCafe
   HW/Espresso/Recompiler/PPCRecompilerImlGenFPU.cpp
   HW/Espresso/Recompiler/PPCRecompilerIml.h
   HW/Espresso/Recompiler/PPCRecompilerIntermediate.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64AVX.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64BMI.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64FPU.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64Gen.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64GenFPU.cpp
-  HW/Espresso/Recompiler/BackendX64/BackendX64.h
-  HW/Espresso/Recompiler/BackendX64/X64Emit.hpp
-  HW/Espresso/Recompiler/BackendX64/x86Emitter.h
   HW/Latte/Common/RegisterSerializer.cpp
   HW/Latte/Common/RegisterSerializer.h
   HW/Latte/Common/ShaderSerializer.cpp
@@ -238,6 +229,8 @@ add_library(CemuCafe
   IOSU/legacy/iosu_acp.h
   IOSU/legacy/iosu_act.cpp
   IOSU/legacy/iosu_act.h
+  IOSU/legacy/iosu_boss.cpp
+  IOSU/legacy/iosu_boss.h
   IOSU/legacy/iosu_crypto.cpp
   IOSU/legacy/iosu_crypto.h
   IOSU/legacy/iosu_fpd.cpp
@@ -250,10 +243,6 @@ add_library(CemuCafe
   IOSU/legacy/iosu_nim.h
   IOSU/nn/iosu_nn_service.cpp
   IOSU/nn/iosu_nn_service.h
-  IOSU/nn/boss/boss_common.cpp
-  IOSU/nn/boss/boss_common.h
-  IOSU/nn/boss/boss_service.cpp
-  IOSU/nn/boss/boss_service.h
   IOSU/PDM/iosu_pdm.cpp
   IOSU/PDM/iosu_pdm.h
   IOSU/ODM/iosu_odm.cpp
@@ -420,7 +409,6 @@ add_library(CemuCafe
   OS/libs/nn_ccr/nn_ccr.h
   OS/libs/nn_cmpt/nn_cmpt.cpp
   OS/libs/nn_cmpt/nn_cmpt.h
-  OS/libs/nn_client_service.h
   OS/libs/nn_common.h
   OS/libs/nn_ec/nn_ec.cpp
   OS/libs/nn_ec/nn_ec.h
@@ -515,8 +503,6 @@ add_library(CemuCafe
   OS/libs/zlib125
   OS/libs/zlib125/zlib125.cpp
   OS/libs/zlib125/zlib125.h
-  OS/RPL/COSModule.cpp
-  OS/RPL/COSModule.h
   OS/RPL/elf.cpp
   OS/RPL/rpl.cpp
   OS/RPL/rpl_debug_symbols.cpp
@@ -525,7 +511,6 @@ add_library(CemuCafe
   OS/RPL/rpl_structs.h
   OS/RPL/rpl_symbol_storage.cpp
   OS/RPL/rpl_symbol_storage.h
-  TitleList/GameInfo.cpp
   TitleList/GameInfo.h
   TitleList/ParsedMetaXml.h
   TitleList/SaveInfo.cpp
@@ -539,70 +524,27 @@ add_library(CemuCafe
   TitleList/TitleList.h
 )
 
-if(APPLE)
-	target_sources(CemuCafe PRIVATE
-	    HW/Latte/Renderer/Vulkan/CocoaSurface.mm
-	    HW/Latte/Renderer/MetalView.mm
-	    HW/Latte/Renderer/MetalView.h
-	)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)")
+  target_sources(CemuCafe PRIVATE
+    HW/Espresso/Recompiler/BackendX64/BackendX64AVX.cpp
+    HW/Espresso/Recompiler/BackendX64/BackendX64BMI.cpp
+    HW/Espresso/Recompiler/BackendX64/BackendX64.cpp
+    HW/Espresso/Recompiler/BackendX64/BackendX64FPU.cpp
+    HW/Espresso/Recompiler/BackendX64/BackendX64Gen.cpp
+    HW/Espresso/Recompiler/BackendX64/BackendX64GenFPU.cpp
+    HW/Espresso/Recompiler/BackendX64/BackendX64.h
+    HW/Espresso/Recompiler/BackendX64/X64Emit.hpp
+    HW/Espresso/Recompiler/BackendX64/x86Emitter.h
+  )
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)")
+  target_sources(CemuCafe PRIVATE
+    HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
+    HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.h
+  )
 endif()
 
-if(ENABLE_METAL)
-    target_sources(CemuCafe PRIVATE
-        HW/Latte/Renderer/Metal/CachedFBOMtl.cpp
-        HW/Latte/Renderer/Metal/CachedFBOMtl.h
-        HW/Latte/Renderer/Metal/LatteTextureMtl.cpp
-        HW/Latte/Renderer/Metal/LatteTextureMtl.h
-        HW/Latte/Renderer/Metal/LatteTextureReadbackMtl.cpp
-        HW/Latte/Renderer/Metal/LatteTextureReadbackMtl.h
-        HW/Latte/Renderer/Metal/LatteTextureViewMtl.cpp
-        HW/Latte/Renderer/Metal/LatteTextureViewMtl.h
-        HW/Latte/Renderer/Metal/LatteToMtl.cpp
-        HW/Latte/Renderer/Metal/LatteToMtl.h
-        HW/Latte/Renderer/Metal/MetalAttachmentsInfo.cpp
-        HW/Latte/Renderer/Metal/MetalAttachmentsInfo.h
-        HW/Latte/Renderer/Metal/MetalBufferAllocator.cpp
-        HW/Latte/Renderer/Metal/MetalBufferAllocator.h
-        HW/Latte/Renderer/Metal/MetalCommon.h
-        HW/Latte/Renderer/Metal/MetalCppImpl.cpp
-        HW/Latte/Renderer/Metal/MetalDepthStencilCache.cpp
-        HW/Latte/Renderer/Metal/MetalDepthStencilCache.h
-        HW/Latte/Renderer/Metal/MetalLayer.h
-        HW/Latte/Renderer/Metal/MetalLayer.mm
-        HW/Latte/Renderer/Metal/MetalLayerHandle.cpp
-        HW/Latte/Renderer/Metal/MetalLayerHandle.h
-        HW/Latte/Renderer/Metal/MetalMemoryManager.cpp
-        HW/Latte/Renderer/Metal/MetalMemoryManager.h
-        HW/Latte/Renderer/Metal/MetalOutputShaderCache.cpp
-        HW/Latte/Renderer/Metal/MetalOutputShaderCache.h
-        HW/Latte/Renderer/Metal/MetalPerformanceMonitor.h
-        HW/Latte/Renderer/Metal/MetalPipelineCache.cpp
-        HW/Latte/Renderer/Metal/MetalPipelineCache.h
-        HW/Latte/Renderer/Metal/MetalPipelineCompiler.cpp
-        HW/Latte/Renderer/Metal/MetalPipelineCompiler.h
-        HW/Latte/Renderer/Metal/MetalQuery.cpp
-        HW/Latte/Renderer/Metal/MetalQuery.h
-        HW/Latte/Renderer/Metal/MetalRenderer.cpp
-        HW/Latte/Renderer/Metal/MetalRenderer.h
-        HW/Latte/Renderer/Metal/MetalSamplerCache.cpp
-        HW/Latte/Renderer/Metal/MetalSamplerCache.h
-        HW/Latte/Renderer/Metal/MetalVoidVertexPipeline.cpp
-        HW/Latte/Renderer/Metal/MetalVoidVertexPipeline.h
-        HW/Latte/Renderer/Metal/RendererShaderMtl.cpp
-        HW/Latte/Renderer/Metal/RendererShaderMtl.h
-        HW/Latte/Renderer/Metal/UtilityShaderSource.h
-    )
-
-    target_sources(CemuCafe PRIVATE
-        HW/Latte/LegacyShaderDecompiler/LatteDecompilerEmitMSLAttrDecoder.cpp
-        HW/Latte/LegacyShaderDecompiler/LatteDecompilerEmitMSL.cpp
-        HW/Latte/LegacyShaderDecompiler/LatteDecompilerEmitMSLHeader.hpp
-    )
-
-    target_link_libraries(CemuCafe PRIVATE
-        "-framework Metal"
-        "-framework QuartzCore"
-    )
+if(APPLE)
+	target_sources(CemuCafe PRIVATE "HW/Latte/Renderer/Vulkan/CocoaSurface.mm")
 endif()
 
 if(ANDROID)
@@ -615,7 +557,7 @@ if(ANDROID)
   endif()
 endif()
 
-if(CEMU_ARCHITECTURE MATCHES "(aarch64)|(AARCH64)|(arm64)|(ARM64)")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)")
   target_sources(CemuCafe PRIVATE
     HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.cpp
     HW/Espresso/Recompiler/BackendAArch64/BackendAArch64.h
@@ -625,29 +567,36 @@ endif()
 
 set_property(TARGET CemuCafe PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-cemu_use_precompiled_header(CemuCafe)
-
 target_include_directories(CemuCafe PUBLIC "../")
 
 if (glslang_VERSION VERSION_LESS "15.0.0")
 	set(glslang_target "glslang::SPIRV")
 else()
-	set(glslang_target "glslang::glslang")
+	set(glslang_target "glslang")
 endif()
 
 target_link_libraries(CemuCafe PRIVATE
+	CemuAudio
 	CemuCommon
-  CemuGui
-  ZArchive::zarchive
-  imguiImpl
-  pugixml::pugixml
-  ZLIB::ZLIB
-  CURL::libcurl
-  ih264d
-  zstd::zstd
-  ${glslang_target}
-  PUBLIC
-  OpenSSL::SSL
+	CemuComponents
+	CemuConfig
+	CemuInput
+	CemuResource
+	CemuUtil
+	imguiImpl
+	Boost::headers
+	Boost::nowide
+	CURL::libcurl
+	fmt::fmt
+	${glslang_target}
+	ih264d
+	OpenSSL::Crypto
+	OpenSSL::SSL
+	PNG::PNG
+	pugixml::pugixml
+	ZArchive::zarchive
+	ZLIB::ZLIB
+	zstd::zstd
 )
 
 if (ENABLE_WAYLAND)
@@ -666,6 +615,10 @@ else ()
   find_package(libusb MODULE REQUIRED)
   target_link_libraries(CemuCafe PRIVATE libusb::libusb)
 endif ()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64)|(AARCH64)")
+  target_link_libraries(CemuCafe PRIVATE xbyak_aarch64)
+endif()
 
 if(WIN32)
 	target_link_libraries(CemuCafe PRIVATE iphlpapi)

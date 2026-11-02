@@ -457,29 +457,14 @@ void mic_updateOnAXFrame()
 
 namespace mic
 {
-	class : public COSModule
+	void Initialize()
 	{
-		public:
-		std::string_view GetName() override
-		{
-			return "mic";
-		}
-
-		void RPLMapped() override
-		{
-			osLib_addFunction("mic", "MICInit", micExport_MICInit);
-			osLib_addFunction("mic", "MICOpen", micExport_MICOpen);
-			osLib_addFunction("mic", "MICClose", micExport_MICClose);
-			osLib_addFunction("mic", "MICGetStatus", micExport_MICGetStatus);
-			osLib_addFunction("mic", "MICGetState", micExport_MICGetState);
-			osLib_addFunction("mic", "MICSetState", micExport_MICSetState);
-			osLib_addFunction("mic", "MICSetDataConsumed", micExport_MICSetDataConsumed);
-		}
-	}s_COSmicModule;
-
-	COSModule* GetModule()
-	{
-		return &s_COSmicModule;
+		osLib_addFunction("mic", "MICInit", micExport_MICInit);
+		osLib_addFunction("mic", "MICOpen", micExport_MICOpen);
+		osLib_addFunction("mic", "MICClose", micExport_MICClose);
+		osLib_addFunction("mic", "MICGetStatus", micExport_MICGetStatus);
+		osLib_addFunction("mic", "MICGetState", micExport_MICGetState);
+		osLib_addFunction("mic", "MICSetState", micExport_MICSetState);
+		osLib_addFunction("mic", "MICSetDataConsumed", micExport_MICSetDataConsumed);
 	}
-
 };

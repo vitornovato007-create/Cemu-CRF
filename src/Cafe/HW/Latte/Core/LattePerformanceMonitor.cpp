@@ -1,6 +1,6 @@
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
-#include "WindowSystem.h"
+#include "Cafe/CafeSystem.h"
 
 performanceMonitor_t performanceMonitor{};
 
@@ -103,15 +103,18 @@ void LattePerformanceMonitor_frameEnd()
 		// next update in 1 second
 		performanceMonitor.cycle[performanceMonitor.cycleIndex].lastUpdate = GetTickCount();
 
+		auto cafeSystemCallbacks = CafeSystem::getCafeSystemCallbacks();
 		if (isFirstUpdate)
 		{
 			LatteOverlay_updateStats(0.0, 0, 0);
-			WindowSystem::UpdateWindowTitles(false, false, 0.0);
+			if (cafeSystemCallbacks)
+				cafeSystemCallbacks->updateWindowTitles(false, false, 0.0);
 		}
 		else
 		{
 			LatteOverlay_updateStats(fps, drawCallCounter / elapsedFrames, fastDrawCallCounter / elapsedFrames);
-			WindowSystem::UpdateWindowTitles(false, false, fps);
+			if (cafeSystemCallbacks)
+				cafeSystemCallbacks->updateWindowTitles(false, false, fps);
 		}
 	}
 }

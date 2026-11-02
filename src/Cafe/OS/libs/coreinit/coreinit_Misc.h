@@ -38,8 +38,6 @@ namespace coreinit
 		Info = 2
 	};
 
-	void OSFatal(const char* msg);
-
 	sint32 ppc_vprintf(const char* formatStr, char* strOut, sint32 maxLength, ppc_va_list* vargs);
 
 	void miscInit();

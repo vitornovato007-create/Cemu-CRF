@@ -1,159 +1,116 @@
 package info.cemu.cemu.graphicpacks
 
-import info.cemu.cemu.BuildConfig
-import info.cemu.cemu.common.io.unzip
+import android.content.Context
 import info.cemu.cemu.nativeinterface.NativeGraphicPacks
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsBytes
-import io.ktor.http.isSuccess
+import info.cemu.cemu.utils.unzip
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.executeAsync
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import kotlin.io.path.div
 import kotlin.io.path.readText
-import kotlin.time.Clock
 
-enum class GraphicPacksDownloadStatus {
-    CHECKING_VERSION,
-    NO_UPDATES_AVAILABLE,
-    DOWNLOADING,
-    EXTRACTING,
-    FINISHED_DOWNLOADING,
-    ERROR,
+sealed class GraphicPacksDownloadStatus {
+    data object CheckingForUpdates : GraphicPacksDownloadStatus()
+    data object NoUpdatesAvailable : GraphicPacksDownloadStatus()
+    data object Downloading : GraphicPacksDownloadStatus()
+    data object FinishedDownloading : GraphicPacksDownloadStatus()
+    data object Error : GraphicPacksDownloadStatus()
+    data object Canceled : GraphicPacksDownloadStatus()
 }
 
-@Serializable
-data class Release(
-    val name: String,
-    val assets: List<Asset>
-)
-
-@Serializable
-data class Asset(
-    @SerialName("browser_download_url")
-    val browserDownloadUrl: String
-)
-
-class GraphicPacksDownloader(private val client: HttpClient = HttpClient()) {
-    private val json = Json {
-        ignoreUnknownKeys = true
-    }
-
+class GraphicPacksDownloader {
     private fun getCurrentVersion(graphicPacksDir: File): String? {
         val graphicPacksVersionFile =
             graphicPacksDir.toPath() / "downloadedGraphicPacks" / "version.txt"
         return try {
             graphicPacksVersionFile.readText()
-        } catch (_: IOException) {
+        } catch (ignored: IOException) {
             null
         }
     }
 
-    private suspend fun getUpdateUrl(): String {
-        val queryUrl = "https://cemu.info/api2/query_graphicpack_url.php?" +
-                "version=${BuildConfig.VERSION_NAME}" +
-                "&t=${Clock.System.now().toEpochMilliseconds()}"
-
-        val response = client.get(queryUrl)
-        val body = response.body<String>().trim()
-
-        if (response.status.isSuccess() && body.startsWith("http")) {
-            return body
+    suspend fun download(
+        context: Context,
+        updateStatus: suspend (GraphicPacksDownloadStatus) -> Unit
+    ) {
+        val graphicPacksRootDir = context.getExternalFilesDir(null)
+        if (graphicPacksRootDir == null) {
+            updateStatus(GraphicPacksDownloadStatus.Error)
+            return
         }
-
-        return "https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest"
+        val graphicPacksDirPath = graphicPacksRootDir.toPath() / "graphicPacks"
+        checkForNewUpdate(graphicPacksDirPath.toFile(), updateStatus)
     }
 
-    private suspend fun fetchLatestRelease(): Release? {
-        val response = client.get(getUpdateUrl())
-
-        if (!response.status.isSuccess()) {
-            return null
-        }
-
-        return try {
-            json.decodeFromString<Release>(response.body())
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun isUpToDate(dir: File, newVersion: String): Boolean {
-        return getCurrentVersion(dir) == newVersion
-    }
-
-    private suspend fun downloadZip(url: String): ByteArray? {
-        val response = client.get(url)
-
-        if (!response.status.isSuccess()) {
-            return null
-        }
-
-        return response.bodyAsBytes()
-    }
-
-    private suspend fun extractAndInstall(
-        zipBytes: ByteArray,
+    private suspend fun checkForNewUpdate(
         graphicPacksDir: File,
-        version: String
-    ) = withContext(Dispatchers.IO) {
-
-        val tempDir = graphicPacksDir.resolve("downloadedGraphicPacksTemp")
-        val finalDir = graphicPacksDir.resolve("downloadedGraphicPacks")
-
-        tempDir.deleteRecursively()
-
-        unzip(zipBytes.inputStream(), tempDir.path)
-
-        tempDir.resolve("version.txt").writeText(version)
-
-        finalDir.deleteRecursively()
-        tempDir.renameTo(finalDir)
-
-        NativeGraphicPacks.refreshGraphicPacks()
+        updateStatus: suspend (GraphicPacksDownloadStatus) -> Unit
+    ) {
+        updateStatus(GraphicPacksDownloadStatus.CheckingForUpdates)
+        val request = Request.Builder()
+            .url(GITHUB_RELEASES_API_URL)
+            .build()
+        Client.newCall(request).executeAsync().use { response ->
+            withContext(Dispatchers.IO) {
+                if (!response.isSuccessful) {
+                    updateStatus(GraphicPacksDownloadStatus.Error)
+                    return@withContext
+                }
+                val json = JSONObject(response.body.string())
+                val version = json.getString("name")
+                if (getCurrentVersion(graphicPacksDir) == version) {
+                    updateStatus(GraphicPacksDownloadStatus.NoUpdatesAvailable)
+                    return@withContext
+                }
+                val downloadUrl = json.getJSONArray("assets")
+                    .getJSONObject(0)
+                    .getString("browser_download_url")
+                downloadNewUpdate(graphicPacksDir, downloadUrl, version, updateStatus)
+            }
+        }
     }
 
-    fun download(graphicPacksRootDir: File): Flow<GraphicPacksDownloadStatus> = flow {
-        val graphicPacksDir = graphicPacksRootDir.resolve("graphicPacks")
-
-        emit(GraphicPacksDownloadStatus.CHECKING_VERSION)
-
-        val release = fetchLatestRelease() ?: run {
-            emit(GraphicPacksDownloadStatus.ERROR)
-            return@flow
+    private suspend fun downloadNewUpdate(
+        graphicPacksDir: File,
+        downloadUrl: String,
+        version: String,
+        updateStatus: suspend (GraphicPacksDownloadStatus) -> Unit
+    ) {
+        updateStatus(GraphicPacksDownloadStatus.Downloading)
+        val request = Request.Builder()
+            .url(downloadUrl)
+            .build()
+        Client.newCall(request).executeAsync().use { response ->
+            withContext(Dispatchers.IO) {
+                if (!response.isSuccessful) {
+                    updateStatus(GraphicPacksDownloadStatus.Error)
+                    return@withContext
+                }
+                val graphicPacksTempDir = graphicPacksDir.resolve("downloadedGraphicPacksTemp")
+                graphicPacksTempDir.deleteRecursively()
+                unzip(
+                    response.body.byteStream(),
+                    graphicPacksTempDir.path.toString()
+                )
+                graphicPacksTempDir.resolve("version.txt").writeText(version)
+                val downloadedGraphicPacksDir =
+                    graphicPacksDir.resolve("downloadedGraphicPacks")
+                downloadedGraphicPacksDir.deleteRecursively()
+                graphicPacksTempDir.renameTo(downloadedGraphicPacksDir)
+                NativeGraphicPacks.refreshGraphicPacks()
+                updateStatus(GraphicPacksDownloadStatus.FinishedDownloading)
+            }
         }
+    }
 
-        val version = release.name
-
-        if (isUpToDate(graphicPacksDir, version)) {
-            emit(GraphicPacksDownloadStatus.NO_UPDATES_AVAILABLE)
-            return@flow
-        }
-
-        val downloadUrl = release.assets.firstOrNull()?.browserDownloadUrl ?: run {
-            emit(GraphicPacksDownloadStatus.ERROR)
-            return@flow
-        }
-
-        emit(GraphicPacksDownloadStatus.DOWNLOADING)
-
-        val zipBytes = downloadZip(downloadUrl) ?: run {
-            emit(GraphicPacksDownloadStatus.ERROR)
-            return@flow
-        }
-
-        emit(GraphicPacksDownloadStatus.EXTRACTING)
-
-        extractAndInstall(zipBytes, graphicPacksDir, version)
-
-        emit(GraphicPacksDownloadStatus.FINISHED_DOWNLOADING)
+    companion object {
+        private val Client = OkHttpClient()
+        private const val GITHUB_RELEASES_API_URL =
+            "https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest"
     }
 }

@@ -4,7 +4,6 @@
 #include <mmsystem.h>
 #include <mmreg.h>
 #include <dsound.h>
-#include <wrl/client.h>
 
 #include "IAudioAPI.h"
 
@@ -51,6 +50,11 @@ private:
 
 	static const std::vector<DeviceDescriptionPtr>& RefreshDevices();
 
+	struct XAudioDeleter
+	{
+		void operator()(IXAudio2* ptr) const;
+	};
+
 	struct VoiceDeleter
 	{
 		void operator()(IXAudio2Voice* ptr) const;
@@ -59,7 +63,7 @@ private:
 	static HMODULE s_xaudio_dll;
 	static std::vector<DeviceDescriptionPtr> s_devices;
 
-	Microsoft::WRL::ComPtr<IXAudio2> m_xaudio;
+	std::unique_ptr<IXAudio2, XAudioDeleter> m_xaudio;
 	std::wstring m_device_id;
 	std::unique_ptr<IXAudio2MasteringVoice, VoiceDeleter> m_mastering_voice;
 	std::unique_ptr<IXAudio2SourceVoice, VoiceDeleter> m_source_voice;

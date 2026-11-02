@@ -5,6 +5,7 @@ import info.cemu.cemu.nativeinterface.NativeSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+
 class GamesPathsViewModel : ViewModel() {
     private val _gamesPaths = MutableStateFlow(NativeSettings.getGamesPaths().toList())
     val gamesPaths = _gamesPaths.asStateFlow()

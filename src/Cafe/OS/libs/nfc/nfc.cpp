@@ -638,35 +638,21 @@ namespace nfc
 		return NFC_RESULT_SUCCESS;
 	}
 
-	class : public COSModule
+	void Initialize()
 	{
-		public:
-		std::string_view GetName() override
-		{
-			return "nfc";
-		}
-
-		void RPLMapped() override
-		{
-			cafeExportRegister("nfc", NFCInit, LogType::NFC);
-			cafeExportRegister("nfc", NFCInitEx, LogType::NFC);
-			cafeExportRegister("nfc", NFCShutdown, LogType::NFC);
-			cafeExportRegister("nfc", NFCIsInit, LogType::NFC);
-			cafeExportRegister("nfc", NFCProc, LogType::NFC);
-			cafeExportRegister("nfc", NFCGetMode, LogType::NFC);
-			cafeExportRegister("nfc", NFCSetMode, LogType::NFC);
-			cafeExportRegister("nfc", NFCSetTagDetectCallback, LogType::NFC);
-			cafeExportRegister("nfc", NFCGetTagInfo, LogType::NFC);
-			cafeExportRegister("nfc", NFCSendRawData, LogType::NFC);
-			cafeExportRegister("nfc", NFCAbort, LogType::NFC);
-			cafeExportRegister("nfc", NFCRead, LogType::NFC);
-			cafeExportRegister("nfc", NFCWrite, LogType::NFC);
-		};
-	}s_COSnfcModule;
-
-	COSModule* GetModule()
-	{
-		return &s_COSnfcModule;
+		cafeExportRegister("nfc", NFCInit, LogType::NFC);
+		cafeExportRegister("nfc", NFCInitEx, LogType::NFC);
+		cafeExportRegister("nfc", NFCShutdown, LogType::NFC);
+		cafeExportRegister("nfc", NFCIsInit, LogType::NFC);
+		cafeExportRegister("nfc", NFCProc, LogType::NFC);
+		cafeExportRegister("nfc", NFCGetMode, LogType::NFC);
+		cafeExportRegister("nfc", NFCSetMode, LogType::NFC);
+		cafeExportRegister("nfc", NFCSetTagDetectCallback, LogType::NFC);
+		cafeExportRegister("nfc", NFCGetTagInfo, LogType::NFC);
+		cafeExportRegister("nfc", NFCSendRawData, LogType::NFC);
+		cafeExportRegister("nfc", NFCAbort, LogType::NFC);
+		cafeExportRegister("nfc", NFCRead, LogType::NFC);
+		cafeExportRegister("nfc", NFCWrite, LogType::NFC);
 	}
 
 	bool TouchTagFromFile(const fs::path& filePath, uint32* nfcError)

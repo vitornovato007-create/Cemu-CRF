@@ -13,8 +13,8 @@ namespace GX2
 	void GX2SetClearDepthStencil(GX2DepthBuffer* depthBuffer, float depthClearValue, uint8 stencilClearValue)
 	{
 		GX2ReserveCmdSpace(4);
-		depthBuffer->clearDepth = depthClearValue;
-		depthBuffer->clearStencil = stencilClearValue;
+		*(uint32*)&depthBuffer->clearDepth = _swapEndianU32(*(uint32*)&depthClearValue);
+		depthBuffer->clearStencil = _swapEndianU32(stencilClearValue);
 		Latte::LATTE_DB_STENCIL_CLEAR stencilClearReg;
 		stencilClearReg.set_clearValue(stencilClearValue);
 		Latte::LATTE_DB_DEPTH_CLEAR depthClearReg;
@@ -28,7 +28,7 @@ namespace GX2
 	void GX2SetClearDepth(GX2DepthBuffer* depthBuffer, float depthClearValue)
 	{
 		GX2ReserveCmdSpace(3);
-		depthBuffer->clearDepth = depthClearValue;
+		*(uint32*)&depthBuffer->clearDepth = _swapEndianU32(*(uint32*)&depthClearValue);
 		Latte::LATTE_DB_DEPTH_CLEAR depthClearReg;
 		depthClearReg.set_clearValue(depthClearValue);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
@@ -40,7 +40,7 @@ namespace GX2
 	void GX2SetClearStencil(GX2DepthBuffer* depthBuffer, uint8 stencilClearValue)
 	{
 		GX2ReserveCmdSpace(3);
-		depthBuffer->clearStencil = stencilClearValue;
+		depthBuffer->clearStencil = _swapEndianU32(stencilClearValue);
 		Latte::LATTE_DB_STENCIL_CLEAR stencilClearReg;
 		stencilClearReg.set_clearValue(stencilClearValue);
 		gx2WriteGather_submit(pm4HeaderType3(IT_SET_CONTEXT_REG, 1 + 1),
@@ -109,8 +109,8 @@ namespace GX2
 			colorWidth = colorBuffer->surface.width;
 			colorHeight = colorBuffer->surface.height;
 			colorPitch = colorBuffer->surface.pitch;
-			colorFirstSlice = colorBuffer->viewFirstSlice;
-			colorNumSlices = colorBuffer->viewNumSlices;
+			colorFirstSlice = _swapEndianU32(colorBuffer->viewFirstSlice);
+			colorNumSlices = _swapEndianU32(colorBuffer->viewNumSlices);
 		}
 		// depth buffer
 		MPTR depthPhysAddr = MPTR_NULL;
@@ -129,9 +129,10 @@ namespace GX2
 			depthWidth = depthBuffer->surface.width;
 			depthHeight = depthBuffer->surface.height;
 			depthPitch = depthBuffer->surface.pitch;
-			depthFirstSlice = depthBuffer->viewFirstSlice;
-			depthNumSlices = depthBuffer->viewNumSlices;
+			depthFirstSlice = _swapEndianU32(depthBuffer->viewFirstSlice);
+			depthNumSlices = _swapEndianU32(depthBuffer->viewNumSlices);
 		}
+
 		gx2WriteGather_submit(pm4HeaderType3(IT_HLE_CLEAR_COLOR_DEPTH_STENCIL, 23),
 		hleClearFlags,
 		colorPhysAddr,

@@ -1,5 +1,5 @@
 #include "input/api/DirectInput/DirectInputController.h"
-#include "WindowSystem.h"
+#include "gui/guiWrapper.h"
 
 DirectInputController::DirectInputController(const GUID& guid)
 	: base_type(StringFromGUID(guid), fmt::format("[{}]", StringFromGUID(guid))),
@@ -15,6 +15,9 @@ DirectInputController::DirectInputController(const GUID& guid, std::string_view 
 
 DirectInputController::~DirectInputController()
 {
+	if (m_effect)
+		m_effect->Release();
+	
 	if (m_device)
 	{
 		m_device->Unacquire();
@@ -22,10 +25,9 @@ DirectInputController::~DirectInputController()
 		// TODO: test if really needed
 		// workaround for gamecube controllers crash on release?
 		bool should_release_device = true;
-		if (m_product_guid == GUID{})
-		{
-			DIDEVICEINSTANCEW info{};
-			info.dwSize = sizeof(DIDEVICEINSTANCEW);
+		if (m_product_guid == GUID{}) {
+			DIDEVICEINSTANCE info{};
+			info.dwSize = sizeof(DIDEVICEINSTANCE);
 			if (SUCCEEDED(m_device->GetDeviceInfo(&info)))
 			{
 				m_product_guid = info.guidProduct;
@@ -37,8 +39,8 @@ DirectInputController::~DirectInputController()
 		if (kGameCubeController == m_product_guid)
 			should_release_device = false;
 
-		if (!should_release_device)
-			m_device.Detach();
+		if (should_release_device)
+			m_device->Release();
 	}
 }
 
@@ -91,8 +93,8 @@ bool DirectInputController::connect()
 	if (FAILED(hr) || m_device == nullptr)
 		return false;
 
-	DIDEVICEINSTANCEW idi{};
-	idi.dwSize = sizeof(DIDEVICEINSTANCEW);
+	DIDEVICEINSTANCE idi{};
+	idi.dwSize = sizeof(DIDEVICEINSTANCE);
 	if (SUCCEEDED(m_device->GetDeviceInfo(&idi)))
 	{
 		// overwrite guid name with "real" display name
@@ -102,16 +104,18 @@ bool DirectInputController::connect()
 	// set data format
 	if (FAILED(m_device->SetDataFormat(m_provider->get_data_format())))
 	{
+		SAFE_RELEASE(m_device);
 		return false;
 	}
 
-	HWND hwndMainWindow = static_cast<HWND>(WindowSystem::GetWindowInfo().window_main.surface.load());
+	HWND hwndMainWindow = gui_getWindowInfo().window_main.hwnd;
 
 	// set access
 	if (FAILED(m_device->SetCooperativeLevel(hwndMainWindow, DISCL_BACKGROUND | DISCL_EXCLUSIVE)))
 	{
 		if (FAILED(m_device->SetCooperativeLevel(hwndMainWindow, DISCL_BACKGROUND | DISCL_NONEXCLUSIVE)))
 		{
+			SAFE_RELEASE(m_device);
 			return false;
 		}
 		// rumble can only be used with exclusive access
@@ -148,8 +152,8 @@ bool DirectInputController::connect()
 		}
 	}
 
-	DIDEVICEINSTANCEW info{};
-	info.dwSize = sizeof(DIDEVICEINSTANCEW);
+	DIDEVICEINSTANCE info{};
+	info.dwSize = sizeof(DIDEVICEINSTANCE);
 	if (SUCCEEDED(m_device->GetDeviceInfo(&info)))
 	{
 		m_product_guid = info.guidProduct;
@@ -158,7 +162,7 @@ bool DirectInputController::connect()
 	std::fill(m_min_axis.begin(), m_min_axis.end(), 0);
 	std::fill(m_max_axis.begin(), m_max_axis.end(), std::numeric_limits<uint16>::max());
 	m_device->EnumObjects(
-		[](LPCDIDEVICEOBJECTINSTANCEW lpddoi, LPVOID pvRef) -> BOOL
+		[](LPCDIDEVICEOBJECTINSTANCE lpddoi, LPVOID pvRef) -> BOOL
 		{
 			auto* thisptr = (DirectInputController*)pvRef;
 

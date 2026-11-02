@@ -1,6 +1,5 @@
 #pragma once
 #include "Cafe/HW/Latte/Core/LatteConst.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 // base defines for GX2
 #define GX2_TRUE	1
@@ -12,10 +11,7 @@
 
 // general
 
-namespace GX2
-{
-	COSModule* GetModule();
-}
+void gx2_load();
 
 // shader
 
@@ -72,3 +68,9 @@ void gx2Export_GX2MarkScanBufferCopied(PPCInterpreter_t* hCPU);
 void gx2Export_GX2SetDefaultState(PPCInterpreter_t* hCPU);
 void gx2Export_GX2SetupContextStateEx(PPCInterpreter_t* hCPU);
 void gx2Export_GX2SetContextState(PPCInterpreter_t* hCPU);
+
+// command buffer
+
+uint32 _GX2GetUnflushedBytes(uint32 coreIndex);
+void _GX2SubmitToTCL();
+void GX2ReserveCmdSpace(uint32 reservedFreeSpaceInU32);

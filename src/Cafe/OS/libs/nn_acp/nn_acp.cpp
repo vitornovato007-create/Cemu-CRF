@@ -335,49 +335,34 @@ namespace acp
 		osLib_returnFromFunction(hCPU, 0);
 	}
 
-	class : public COSModule
+	void load()
 	{
-		public:
-		std::string_view GetName() override
-		{
-			return "nn_acp";
-		}
+		cafeExportRegister("nn_acp", ACPCheckApplicationDeviceEmulation, LogType::Placeholder);
 
-		void RPLMapped() override
-		{
-			cafeExportRegister("nn_acp", ACPCheckApplicationDeviceEmulation, LogType::Placeholder);
+		osLib_addFunction("nn_acp", "ACPCreateSaveDirEx", nnACPExport_ACPCreateSaveDirEx);
+		cafeExportRegister("nn_acp", ACPUpdateSaveTimeStamp, LogType::Placeholder);
 
-			osLib_addFunction("nn_acp", "ACPCreateSaveDirEx", nnACPExport_ACPCreateSaveDirEx);
-			cafeExportRegister("nn_acp", ACPUpdateSaveTimeStamp, LogType::Placeholder);
+		osLib_addFunction("nn_acp", "ACPGetSaveDataTitleIdList", export_ACPGetSaveDataTitleIdList);
+		osLib_addFunction("nn_acp", "ACPGetTitleSaveMetaXml", export_ACPGetTitleSaveMetaXml);
+		osLib_addFunction("nn_acp", "ACPGetTitleSaveDirEx", export_ACPGetTitleSaveDirEx);
 
-			osLib_addFunction("nn_acp", "ACPGetSaveDataTitleIdList", export_ACPGetSaveDataTitleIdList);
-			osLib_addFunction("nn_acp", "ACPGetTitleSaveMetaXml", export_ACPGetTitleSaveMetaXml);
-			osLib_addFunction("nn_acp", "ACPGetTitleSaveDirEx", export_ACPGetTitleSaveDirEx);
+		osLib_addFunction("nn_acp", "ACPCheckTitleNotReferAccountLaunch", export_ACPCheckTitleNotReferAccountLaunch);
+		osLib_addFunction("nn_acp", "ACPGetLaunchMetaData", export_ACPGetLaunchMetaData);
+		osLib_addFunction("nn_acp", "ACPGetLaunchMetaXml", export_ACPGetLaunchMetaXml);
+		osLib_addFunction("nn_acp", "ACPGetTitleIdOfMainApplication", export_ACPGetTitleIdOfMainApplication);
 
-			osLib_addFunction("nn_acp", "ACPCheckTitleNotReferAccountLaunch", export_ACPCheckTitleNotReferAccountLaunch);
-			osLib_addFunction("nn_acp", "ACPGetLaunchMetaData", export_ACPGetLaunchMetaData);
-			osLib_addFunction("nn_acp", "ACPGetLaunchMetaXml", export_ACPGetLaunchMetaXml);
-			osLib_addFunction("nn_acp", "ACPGetTitleIdOfMainApplication", export_ACPGetTitleIdOfMainApplication);
+		osLib_addFunction("nn_acp", "ACPGetTitleMetaDirByDevice", export_ACPGetTitleMetaDirByDevice);
+		osLib_addFunction("nn_acp", "ACPGetTitleMetaXmlByDevice", export_ACPGetTitleMetaXmlByDevice);
+		cafeExportRegister("nn_acp", ACPGetTitleMetaXml, LogType::Placeholder);
 
-			osLib_addFunction("nn_acp", "ACPGetTitleMetaDirByDevice", export_ACPGetTitleMetaDirByDevice);
-			osLib_addFunction("nn_acp", "ACPGetTitleMetaXmlByDevice", export_ACPGetTitleMetaXmlByDevice);
-			cafeExportRegister("nn_acp", ACPGetTitleMetaXml, LogType::Placeholder);
+		cafeExportRegister("nn_acp", ACPGetApplicationBox, LogType::Placeholder);
 
-			cafeExportRegister("nn_acp", ACPGetApplicationBox, LogType::Placeholder);
+		cafeExportRegister("nn_acp", ACPGetOlvAccesskey, LogType::Placeholder);
 
-			cafeExportRegister("nn_acp", ACPGetOlvAccesskey, LogType::Placeholder);
+		osLib_addFunction("nn_acp", "ACPIsOverAgeEx", export_ACPIsOverAgeEx);
 
-			osLib_addFunction("nn_acp", "ACPIsOverAgeEx", export_ACPIsOverAgeEx);
-
-			osLib_addFunction("nn_acp", "ACPGetNetworkTime", export_ACPGetNetworkTime);
-			osLib_addFunction("nn_acp", "ACPConvertNetworkTimeToOSCalendarTime", export_ACPConvertNetworkTimeToOSCalendarTime);
-		};
-
-	}s_COSnnAcpModule;
-
-	COSModule* GetModule()
-	{
-		return &s_COSnnAcpModule;
+		osLib_addFunction("nn_acp", "ACPGetNetworkTime", export_ACPGetNetworkTime);
+		osLib_addFunction("nn_acp", "ACPConvertNetworkTimeToOSCalendarTime", export_ACPConvertNetworkTimeToOSCalendarTime);
 	}
 }
 }

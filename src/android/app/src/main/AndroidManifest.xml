@@ -53,6 +53,10 @@
                 <data android:pathPattern=".*\\.iso" />
                 <data android:pathPattern=".*\\.elf" />
                 <data android:pathPattern=".*\\.rpx" />
+                <!--
+                TODO?
+                <data android:pathPattern=".*/title.tmd" />
+                -->
             </intent-filter>
         </activity>
 

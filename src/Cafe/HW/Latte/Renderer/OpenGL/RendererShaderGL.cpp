@@ -147,21 +147,14 @@ RendererShaderGL::RendererShaderGL(ShaderType type, uint64 baseHash, uint64 auxH
 
 RendererShaderGL::~RendererShaderGL()
 {
-	CleanupShaderObj();
-
-	if (m_program != 0)
-		glDeleteProgram(m_program);
-}
-
-void RendererShaderGL::CleanupShaderObj()
-{
 	if (m_shader_object != 0 && m_shader_attached)
 		glDetachShader(m_program, m_shader_object);
 
 	if (m_shader_object != 0)
 		glDeleteShader(m_shader_object);
 
-	m_shader_object = 0;
+	if (m_program != 0)
+		glDeleteProgram(m_program);
 }
 
 void RendererShaderGL::PreponeCompilation(bool isRenderThread)
@@ -199,8 +192,9 @@ bool RendererShaderGL::WaitForCompiled()
 			cemuLog_log(LogType::Force, "Compile error in shader. Log:");
 			cemuLog_log(LogType::Force, infoLog);
 		}
+		if (m_shader_object != 0)
+			glDeleteShader(m_shader_object);
 		m_isCompiled = true;
-		CleanupShaderObj();
 		return false;
 	}
 	// get shader binary
@@ -219,28 +213,18 @@ bool RendererShaderGL::WaitForCompiled()
 			cemuLog_log(LogType::Force, infoLog);
 		}
 		m_isCompiled = true;
-		CleanupShaderObj();
 		return false;
 	}
 
+	/*glDetachShader(m_program, m_shader_object);
+	m_shader_attached = false;*/
 	m_isCompiled = true;
-	CleanupShaderObj();
 	return true;
 }
 
 sint32 RendererShaderGL::GetUniformLocation(const char* name)
 {
 	return glGetUniformLocation(m_program, name);
-}
-
-void RendererShaderGL::SetUniform1i(sint32 location, sint32 value)
-{
-	glProgramUniform1i(m_program, location, value);
-}
-
-void RendererShaderGL::SetUniform1f(sint32 location, float value)
-{
-	glProgramUniform1f(m_program, location, value);
 }
 
 void RendererShaderGL::SetUniform2fv(sint32 location, void* data, sint32 count)

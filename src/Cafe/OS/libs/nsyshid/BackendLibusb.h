@@ -1,10 +1,6 @@
 #include "nsyshid.h"
 
-#if BOOST_OS_BSD
-#include <libusb.h>
-#else
 #include <libusb-1.0/libusb.h>
-#endif
 #include "Backend.h"
 
 namespace nsyshid::backend::libusb

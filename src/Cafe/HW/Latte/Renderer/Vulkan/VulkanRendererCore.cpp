@@ -1,5 +1,4 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
-#include <chrono>
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/LatteTextureVk.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/RendererShaderVk.h"
@@ -61,7 +60,7 @@ uint64 VulkanRenderer::draw_calculateGraphicsPipelineHash(const LatteFetchShader
 	uint64 stateHash;
 	stateHash = draw_calculateMinimalGraphicsPipelineHash(fetchShader, lcr);
 	stateHash = (stateHash >> 8) + (stateHash * 0x370531ull) % 0x7F980D3BF9B4639Dull;
-
+	
 	uint32* ctxRegister = lcr.GetRawView();
 
 	if (vertexShader)
@@ -104,7 +103,7 @@ uint64 VulkanRenderer::draw_calculateGraphicsPipelineHash(const LatteFetchShader
 	}
 
 	stateHash += renderPassObj->m_hashForPipeline;
-
+	
 	uint32 depthControl = ctxRegister[Latte::REGADDR::DB_DEPTH_CONTROL];
 	bool stencilTestEnable = depthControl & 1;
 	if (stencilTestEnable)
@@ -112,7 +111,7 @@ uint64 VulkanRenderer::draw_calculateGraphicsPipelineHash(const LatteFetchShader
 		stateHash += ctxRegister[mmDB_STENCILREFMASK];
 		stateHash = std::rotl<uint64>(stateHash, 17);
 		if(depthControl & (1<<7)) // back stencil enable
-		{
+		{ 
 			stateHash += ctxRegister[mmDB_STENCILREFMASK_BF];
 			stateHash = std::rotl<uint64>(stateHash, 13);
 		}
@@ -184,12 +183,69 @@ void VulkanRenderer::unregisterGraphicsPipeline(PipelineInfo* pipelineInfo)
 	}
 }
 
+bool g_compilePipelineThreadInit{false};
+std::mutex g_compilePipelineMutex;
+std::condition_variable g_compilePipelineCondVar;
+std::queue<PipelineCompiler*> g_compilePipelineRequests;
+
+void compilePipeline_thread(sint32 threadIndex)
+{
+	SetThreadName("compilePl");
+#ifdef _WIN32
+	// one thread runs at normal priority while the others run at lower priority
+	if(threadIndex != 0)
+		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+#endif
+	while (true)
+	{
+		std::unique_lock lock(g_compilePipelineMutex);
+		while (g_compilePipelineRequests.empty())
+			g_compilePipelineCondVar.wait(lock);
+
+		PipelineCompiler* request = g_compilePipelineRequests.front();
+
+		g_compilePipelineRequests.pop();
+
+		lock.unlock();
+
+		request->Compile(true, false, true);
+		delete request;
+	}
+}
+
+void compilePipelineThread_init()
+{
+	uint32 numCompileThreads;
+
+	uint32 cpuCoreCount = GetPhysicalCoreCount();
+	if (cpuCoreCount <= 2)
+		numCompileThreads = 1;
+	else
+		numCompileThreads = 2 + (cpuCoreCount - 3); // 2 plus one additionally for every extra core above 3
+
+	numCompileThreads = std::min(numCompileThreads, 8u); // cap at 8
+
+	for (uint32_t i = 0; i < numCompileThreads; i++)
+	{
+		std::thread compileThread(compilePipeline_thread, i);
+		compileThread.detach();
+	}
+}
+
+void compilePipelineThread_queue(PipelineCompiler* v)
+{
+	std::unique_lock lock(g_compilePipelineMutex);
+	g_compilePipelineRequests.push(std::move(v));
+	lock.unlock();
+	g_compilePipelineCondVar.notify_one();
+}
+
 // make a guess if a pipeline is not essential
 // non-essential means that skipping these drawcalls shouldn't lead to permanently corrupted graphics
 bool VulkanRenderer::IsAsyncPipelineAllowed(uint32 numIndices)
 {
 	// frame debuggers dont handle async well (as of 2020)
-	if (IsTracingToolEnabled())
+	if (IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
 		return false;
 
 	CachedFBOVk* currentFBO = m_state.activeFBO;
@@ -214,6 +270,12 @@ bool VulkanRenderer::IsAsyncPipelineAllowed(uint32 numIndices)
 // create graphics pipeline for current state
 PipelineInfo* VulkanRenderer::draw_createGraphicsPipeline(uint32 indexCount)
 {
+	if (!g_compilePipelineThreadInit)
+	{
+		compilePipelineThread_init();
+		g_compilePipelineThreadInit = true;
+	}
+
 	const auto fetchShader = LatteSHRC_GetActiveFetchShader();
 	const auto vertexShader = LatteSHRC_GetActiveVertexShader();
 	const auto geometryShader = LatteSHRC_GetActiveGeometryShader();
@@ -241,7 +303,7 @@ PipelineInfo* VulkanRenderer::draw_createGraphicsPipeline(uint32 indexCount)
 	pipelineCompiler->TrackAsCached(vsBaseHash, pipelineHash);
 
 	// use heuristics based on parameter patterns to determine if the current drawcall is essential (non-skipable)
-	bool allowAsyncCompile = false;
+	bool allowAsyncCompile = false; 
 	if (GetConfig().async_compile)
 		allowAsyncCompile = IsAsyncPipelineAllowed(indexCount);
 
@@ -251,7 +313,7 @@ PipelineInfo* VulkanRenderer::draw_createGraphicsPipeline(uint32 indexCount)
 		if (pipelineCompiler->Compile(false, true, true) == false)
 		{
 			// shaders or pipeline not cached -> asynchronous compilation
-			PipelineCompiler::CompileThreadPool_QueueCompilation(pipelineCompiler);
+			compilePipelineThread_queue(pipelineCompiler);
 		}
 		else
 		{
@@ -313,80 +375,6 @@ void VulkanRenderer::indexData_uploadIndexMemory(IndexAllocation& allocation)
 }
 
 float s_vkUniformData[512 * 4];
-
-uint32 VulkanRenderer::uniformData_uploadUniformDataBufferGetOffset(std::span<uint8> data)
-{
-	const uint32 bufferAlignmentM1 = std::max(m_featureControl.limits.minUniformBufferOffsetAlignment, m_featureControl.limits.nonCoherentAtomSize) - 1;
-	const uint32 uniformSize = ((uint32)data.size() + bufferAlignmentM1) & ~bufferAlignmentM1;
-
-	auto waitWhileCondition = [&](std::function<bool()> condition) {
-		const auto waitStart = std::chrono::steady_clock::now();
-		uint32 waitIterations = 0;
-		while (condition())
-		{
-			++waitIterations;
-			if (m_commandBufferSyncIndex == m_commandBufferIndex)
-			{
-				if (m_cmdBufferUniformRingbufIndices[m_commandBufferIndex] != m_uniformVarBufferReadIndex)
-				{
-					draw_endRenderPass();
-					SubmitCommandBuffer();
-				}
-				else
-				{
-					// submitting work would not change readIndex, so there's no way for conditions based on it to change
-					cemuLog_log(LogType::Force, "draw call overflowed and corrupted uniform ringbuffer. expect visual corruption");
-					cemu_assert_suspicious();
-					break;
-				}
-			}
-			WaitForNextFinishedCommandBuffer();
-		}
-		const auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::steady_clock::now() - waitStart).count();
-		if (waitDuration >= 10)
-		{
-			cemuLog_log(LogType::Force,
-				"GPU synchronization: uniform ring buffer waited {} ms across {} iterations (read={}, write={}, syncIndex={}, commandIndex={})",
-				waitDuration, waitIterations, m_uniformVarBufferReadIndex, m_uniformVarBufferWriteIndex,
-				m_commandBufferSyncIndex, m_commandBufferIndex);
-		}
-	};
-
-	// wrap around if it doesnt fit consecutively
-	if (m_uniformVarBufferWriteIndex + uniformSize > UNIFORMVAR_RINGBUFFER_SIZE)
-	{
-		waitWhileCondition([&]() {
-			return m_uniformVarBufferReadIndex > m_uniformVarBufferWriteIndex || m_uniformVarBufferReadIndex == 0;
-		});
-		m_uniformVarBufferWriteIndex = 0;
-	}
-
-	auto ringBufRemaining = [&]() {
-		ssize_t ringBufferUsedBytes = (ssize_t)m_uniformVarBufferWriteIndex - m_uniformVarBufferReadIndex;
-		if (ringBufferUsedBytes < 0)
-			ringBufferUsedBytes += UNIFORMVAR_RINGBUFFER_SIZE;
-		return UNIFORMVAR_RINGBUFFER_SIZE - 1 - ringBufferUsedBytes;
-	};
-	waitWhileCondition([&]() {
-		return ringBufRemaining() < uniformSize;
-	});
-
-	const uint32 uniformOffset = m_uniformVarBufferWriteIndex;
-	memcpy(m_uniformVarBufferPtr + uniformOffset, data.data(), data.size());
-	m_uniformVarBufferWriteIndex += uniformSize;
-	// flush if not coherent
-	if (!m_uniformVarBufferMemoryIsCoherent)
-	{
-		VkMappedMemoryRange flushedRange{};
-		flushedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-		flushedRange.memory = m_uniformVarBufferMemory;
-		flushedRange.offset = uniformOffset;
-		flushedRange.size = uniformSize;
-		vkFlushMappedMemoryRanges(m_logicalDevice, 1, &flushedRange);
-	}
-	return uniformOffset;
-}
 
 void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, LatteDecompilerShader* shader)
 {
@@ -465,7 +453,66 @@ void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, Latt
 				}
 			}
 		}
-		dynamicOffsetInfo.uniformVarBufferOffset[shaderStageIndex] = uniformData_uploadUniformDataBufferGetOffset({(uint8*)s_vkUniformData, shader->uniform.uniformRangeSize});
+		// upload
+		const uint32 bufferAlignmentM1 = std::max(m_featureControl.limits.minUniformBufferOffsetAlignment, m_featureControl.limits.nonCoherentAtomSize) - 1;
+		const uint32 uniformSize = (shader->uniform.uniformRangeSize + bufferAlignmentM1) & ~bufferAlignmentM1;
+
+		auto waitWhileCondition = [&](std::function<bool()> condition) {
+			while (condition())
+			{
+				if (m_commandBufferSyncIndex == m_commandBufferIndex)
+				{
+					if (m_cmdBufferUniformRingbufIndices[m_commandBufferIndex] != m_uniformVarBufferReadIndex)
+					{
+						draw_endRenderPass();
+						SubmitCommandBuffer();
+					}
+					else
+					{
+						// submitting work would not change readIndex, so there's no way for conditions based on it to change
+						cemuLog_log(LogType::Force, "draw call overflowed and corrupted uniform ringbuffer. expect visual corruption");
+						cemu_assert_suspicious();
+						break;
+					}
+				}
+				WaitForNextFinishedCommandBuffer();
+			}
+		};
+
+		// wrap around if it doesnt fit consecutively
+		if (m_uniformVarBufferWriteIndex + uniformSize > UNIFORMVAR_RINGBUFFER_SIZE)
+		{
+			waitWhileCondition([&]() {
+				return m_uniformVarBufferReadIndex > m_uniformVarBufferWriteIndex || m_uniformVarBufferReadIndex == 0;
+			});
+			m_uniformVarBufferWriteIndex = 0;
+		}
+
+		auto ringBufRemaining = [&]() {
+			ssize_t ringBufferUsedBytes = (ssize_t)m_uniformVarBufferWriteIndex - m_uniformVarBufferReadIndex;
+			if (ringBufferUsedBytes < 0)
+				ringBufferUsedBytes += UNIFORMVAR_RINGBUFFER_SIZE;
+			return UNIFORMVAR_RINGBUFFER_SIZE - 1 - ringBufferUsedBytes;
+		};
+		waitWhileCondition([&]() {
+			return ringBufRemaining() < uniformSize;
+		});
+
+		const uint32 uniformOffset = m_uniformVarBufferWriteIndex;
+		memcpy(m_uniformVarBufferPtr + uniformOffset, s_vkUniformData, shader->uniform.uniformRangeSize);
+		m_uniformVarBufferWriteIndex += uniformSize;
+		// update dynamic offset
+		dynamicOffsetInfo.uniformVarBufferOffset[shaderStageIndex] = uniformOffset;
+		// flush if not coherent
+		if (!m_uniformVarBufferMemoryIsCoherent)
+		{
+			VkMappedMemoryRange flushedRange{};
+			flushedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+			flushedRange.memory = m_uniformVarBufferMemory;
+			flushedRange.offset = uniformOffset;
+			flushedRange.size = uniformSize;
+			vkFlushMappedMemoryRanges(m_logicalDevice, 1, &flushedRange);
+		}
 	}
 }
 
@@ -689,8 +736,8 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 		LatteTexture* baseTexture = textureView->baseTexture;
 		// get texture register word 0
 		uint32 word4 = LatteGPUState.contextRegister[texUnitRegIndex + 4];
-
-		auto imageViewObj = textureView->GetSamplerView(word4);
+		
+		auto imageViewObj = textureView->GetSamplerView(word4);		
 		info.imageView = imageViewObj->m_textureImageView;
 		vkObjDS->addRef(imageViewObj);
 
@@ -760,7 +807,7 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 				VK_SAMPLER_ADDRESS_MODE_REPEAT, // WRAP
 				VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT, // MIRROR
 				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, // CLAMP_LAST_TEXEL
-				VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE, // MIRROR_ONCE_LAST_TEXEL
+				VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE, // MIRROR_ONCE_LAST_TEXEL 
 				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, // unsupported HALF_BORDER
 				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // unsupported MIRROR_ONCE_HALF_BORDER
 				VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, // CLAMP_BORDER
@@ -888,7 +935,7 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 		uniformVarsBufferInfo.buffer = m_uniformVarBuffer;
 		uniformVarsBufferInfo.offset = 0; // fixed offset is always zero since we only use dynamic offsets
 		uniformVarsBufferInfo.range = shader->uniform.uniformRangeSize;
-
+		
 		VkWriteDescriptorSet write_descriptor{};
 		write_descriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		write_descriptor.dstSet = result;
@@ -1188,7 +1235,7 @@ void VulkanRenderer::draw_setRenderPass()
 	draw_endRenderPass();
 	if (m_state.descriptorSetsChanged)
 		sync_inputTexturesChanged();
-
+	
 	// assume that FBO changed, update self-dependency state
 	m_state.hasRenderSelfDependency = fboVk->CheckForCollision(m_state.activeVertexDS, m_state.activeGeometryDS, m_state.activePixelDS);
 

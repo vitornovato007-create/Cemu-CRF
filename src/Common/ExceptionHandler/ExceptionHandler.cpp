@@ -32,12 +32,8 @@ void CrashLog_SetOutputChannels(bool writeToStdErr, bool writeToLogTxt)
 void CrashLog_WriteLine(std::string_view text, bool newLine)
 {
     if(s_writeToLogTxt)
-    {
         cemuLog_writeLineToLog(text, false, newLine);
-        // Android's persistent diagnostic callback is separate from log.txt.
-        // Forward crash text explicitly so native signal backtraces survive app termination.
         cemuLog_dispatchCrashText(text);
-    }
     if(s_writeToStdErr)
     {
         fwrite(text.data(), sizeof(char), text.size(), stderr);

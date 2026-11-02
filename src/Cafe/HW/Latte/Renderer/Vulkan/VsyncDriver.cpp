@@ -2,8 +2,6 @@
 
 #include <Windows.h>
 
-#include "WindowSystem.h"
-
 typedef LONG NTSTATUS;
 
 typedef UINT32 D3DKMT_HANDLE;
@@ -53,7 +51,7 @@ public:
 private:
 	bool HasMonitorChanged()
 	{
-		HWND hWnd = (HWND)WindowSystem::GetWindowInfo().canvas_main.surface.load();
+		HWND hWnd = (HWND)g_mainFrame->GetRenderCanvasHWND();
 		if (hWnd == 0)
 			return true;
 		HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
@@ -71,7 +69,9 @@ private:
 
 	HRESULT GetAdapterHandleFromHwnd(D3DKMT_HANDLE* phAdapter, UINT* pOutput)
 	{
-		HWND hWnd = (HWND)WindowSystem::GetWindowInfo().canvas_main.surface.load();
+		if (!g_mainFrame)
+			return E_FAIL;
+		HWND hWnd = (HWND)g_mainFrame->GetRenderCanvasHWND();
 		if (hWnd == 0)
 			return E_FAIL;
 
@@ -80,7 +80,7 @@ private:
 
 		D3DKMT_OPENADAPTERFROMHDC OpenAdapterData;
 
-		*phAdapter = 0;
+		*phAdapter = NULL;
 		*pOutput = 0;
 
 		HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);

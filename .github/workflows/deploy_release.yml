@@ -50,7 +50,6 @@ jobs:
   call-release-build:
     uses: ./.github/workflows/build.yml
     needs: calculate-version
-    secrets: inherit
     with:
       next_version_major: ${{ needs.calculate-version.outputs.next_version_major }}
       next_version_minor: ${{ needs.calculate-version.outputs.next_version_minor }}
@@ -60,7 +59,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [call-release-build, calculate-version]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -79,36 +78,31 @@ jobs:
           if [ -n "${{ github.event.inputs.changelog8 }}" ]; then CHANGELOG="$CHANGELOG- ${{ github.event.inputs.changelog8 }}\n"; fi
           echo -e "$CHANGELOG"
           echo "RELEASE_BODY=$CHANGELOG" >> $GITHUB_ENV
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: cemu-bin-linux-x64
           path: cemu-bin-linux-x64
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: cemu-appimage-x64
           path: cemu-appimage-x64
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: cemu-bin-windows-x64
           path: cemu-bin-windows-x64
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
-          name: cemu-installer-windows-x64
-          path: cemu-installer-windows-x64
-
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: cemu-bin-macos*
-          path: cemu-macos
+          name: cemu-bin-macos-x64
+          path: cemu-bin-macos-x64
 
       - name: Initialize
         run: |
           mkdir upload
           sudo apt install zip
-
+          
       - name: Set version dependent vars
         run: |
           echo "Version: ${{ needs.calculate-version.outputs.next_version }}"
@@ -125,9 +119,6 @@ jobs:
           mv cemu-bin-windows-x64/Cemu.exe ./${{ env.CEMU_FOLDER_NAME }}/Cemu.exe
           zip -9 -r upload/cemu-${{ env.CEMU_VERSION }}-windows-x64.zip ${{ env.CEMU_FOLDER_NAME }}
           rm -r ./${{ env.CEMU_FOLDER_NAME }}
-
-      - name: Create release from windows-installer
-        run: cp cemu-installer-windows-x64/cemu-${{ env.CEMU_VERSION }}-windows-x64-installer.exe upload/cemu-${{ env.CEMU_VERSION }}-windows-x64-installer.exe
 
       - name: Create appimage
         run: |
@@ -146,12 +137,7 @@ jobs:
           rm -r ./${{ env.CEMU_FOLDER_NAME }}
           
       - name: Create release from macos-bin
-        run: |
-          cd cemu-macos
-          for bin_dir in cemu-bin-macos-*; do
-            arch="${bin_dir##cemu-bin-macos-}"
-            cp $bin_dir/Cemu.dmg ../upload/cemu-${{ env.CEMU_VERSION }}-macos-12-$arch.dmg
-          done
+        run: cp cemu-bin-macos-x64/Cemu.dmg upload/cemu-${{ env.CEMU_VERSION }}-macos-12-x64.dmg
 
       - name: Create release from android-bin
         run: cp cemu-bin-android/*.apk upload/cemu-${{ env.CEMU_VERSION }}.apk

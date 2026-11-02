@@ -1,6 +1,8 @@
 #pragma once
-#include "Cafe/OS/RPL/COSModule.h"
-namespace nn::fp
+namespace nn
 {
-	COSModule* GetModule();
+	namespace fp
+	{
+		void load();
+	}
 }

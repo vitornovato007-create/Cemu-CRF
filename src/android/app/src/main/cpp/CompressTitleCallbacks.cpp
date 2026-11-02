@@ -3,18 +3,18 @@
 CompressTitleCallbacks::CompressTitleCallbacks(jobject compressTitleCallbacks)
 	: m_compressTitleCallbacks{compressTitleCallbacks}
 {
-	JNIEnv* env = JNIUtils::GetEnv();
+	JNIUtils::ScopedJNIENV env;
 	JNIUtils::Scopedjclass compressTitleCallbacksClass("info/cemu/cemu/nativeinterface/NativeGameTitles$TitleCompressCallbacks");
 	m_onFinishedMID = env->GetMethodID(*compressTitleCallbacksClass, "onFinished", "()V");
 	m_onErrorMID = env->GetMethodID(*compressTitleCallbacksClass, "onError", "()V");
 }
 
-void CompressTitleCallbacks::OnFinished()
+void CompressTitleCallbacks::onFinished()
 {
-	JNIUtils::GetEnv()->CallVoidMethod(*m_compressTitleCallbacks, m_onFinishedMID);
+	JNIUtils::ScopedJNIENV()->CallVoidMethod(*m_compressTitleCallbacks, m_onFinishedMID);
 }
 
-void CompressTitleCallbacks::OnError()
+void CompressTitleCallbacks::onError()
 {
-	JNIUtils::GetEnv()->CallVoidMethod(*m_compressTitleCallbacks, m_onErrorMID);
+	JNIUtils::ScopedJNIENV()->CallVoidMethod(*m_compressTitleCallbacks, m_onErrorMID);
 }

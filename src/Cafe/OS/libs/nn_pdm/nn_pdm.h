@@ -1,6 +1,7 @@
-#include "Cafe/OS/RPL/COSModule.h"
-
-namespace nn::pdm
+namespace nn
 {
-	COSModule* GetModule();
+	namespace pdm
+	{
+		void Initialize();
+	};
 };

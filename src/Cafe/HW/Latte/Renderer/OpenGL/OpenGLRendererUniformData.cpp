@@ -1,4 +1,3 @@
-#include "RendererShaderGL.h"
 #include "Cafe/HW/Latte/Renderer/OpenGL/OpenGLRenderer.h"
 #include "Cafe/HW/Latte/Core/LatteShader.h"
 
@@ -29,7 +28,7 @@ void OpenGLRenderer::uniformData_update()
 		if (!shader)
 			continue;
 
-		auto hostShader = (RendererShaderGL*)shader->shader;
+		auto hostShader = shader->shader;
 
 		if (shader->uniformMode == LATTE_DECOMPILER_UNIFORM_MODE_REMAPPED)
 		{

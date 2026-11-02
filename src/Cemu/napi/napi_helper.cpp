@@ -23,7 +23,7 @@ CURLcode _sslctx_function_NUS(CURL* curl, void* sslctx, void* param)
 	{
 		cemuLog_log(LogType::Force, "Invalid CA certificate (102)");
 	}
-	if (iosuCrypto_addCACertificate(sslctx, 105) == false)
+	if (iosuCrypto_addCACertificate(sslctx, 0x69) == false)
 	{
 		cemuLog_log(LogType::Force, "Invalid CA certificate (105)");
 	}
@@ -79,6 +79,7 @@ CURLcode _sslctx_function_OLIVE(CURL* curl, void* sslctx, void* param)
 		cemuLog_log(LogType::Force, "Olive client certificate error");
 	}
 
+	// NSSLAddServerPKIGroups(sslCtx, 3, &x, &y);
 	{
 		std::vector<sint16> certGroups = {
 			100,  101,  102,   103,  104,  105,
@@ -95,32 +96,6 @@ CURLcode _sslctx_function_OLIVE(CURL* curl, void* sslctx, void* param)
 	SSL_CTX_set_mode((SSL_CTX*)sslctx, SSL_MODE_AUTO_RETRY);
 	SSL_CTX_set_verify_depth((SSL_CTX*)sslctx, 2);
 	SSL_CTX_set_verify((SSL_CTX*)sslctx, SSL_VERIFY_PEER, nullptr);
-	return CURLE_OK;
-}
-
-CURLcode _sslctx_function_CUSTOM(CURL* curl, void* sslctx, void* param)
-{
-	CurlRequestHelper* requestHelper = (CurlRequestHelper*)param;
-	for (auto& caCertId : requestHelper->GetCaCertIds())
-	{
-		if (iosuCrypto_addCACertificate(sslctx, caCertId) == false)
-		{
-			cemuLog_log(LogType::Force, "Invalid CA certificate ({})", caCertId);
-		}
-	}
-	for (auto& clientCertId : requestHelper->GetClientCertIds())
-	{
-		if (iosuCrypto_addCACertificate(sslctx, clientCertId) == false)
-		{
-			cemuLog_log(LogType::Force, "Invalid client certificate ({})", clientCertId);
-		}
-	}
-	SSL_CTX_set_mode((SSL_CTX*)sslctx, SSL_MODE_AUTO_RETRY);
-	SSL_CTX_set_verify_depth((SSL_CTX*)sslctx, 2);
-	if (requestHelper->GetClientCertIds().empty())
-		SSL_CTX_set_verify((SSL_CTX*)sslctx, SSL_VERIFY_NONE, nullptr);
-	else
-		SSL_CTX_set_verify((SSL_CTX*)sslctx, SSL_VERIFY_PEER, nullptr);
 	return CURLE_OK;
 }
 
@@ -187,11 +162,6 @@ void CurlRequestHelper::initate(NetworkService service, std::string url, SERVER_
 		curl_easy_setopt(m_curl, CURLOPT_SSL_CTX_FUNCTION, _sslctx_function_OLIVE);
 		curl_easy_setopt(m_curl, CURLOPT_SSL_CTX_DATA, NULL);
 	}
-	else if (sslContext == SERVER_SSL_CONTEXT::CUSTOM)
-	{
-		curl_easy_setopt(m_curl, CURLOPT_SSL_CTX_FUNCTION, _sslctx_function_CUSTOM);
-		curl_easy_setopt(m_curl, CURLOPT_SSL_CTX_DATA, this);
-	}
 	else
 	{
 		cemu_assert(false);
@@ -248,8 +218,7 @@ bool CurlRequestHelper::submitRequest(bool isPost)
 	// post
 	if (isPost)
 	{
-		if (!m_isUsingMultipartFormData)
-		{
+		if (!m_isUsingMultipartFormData) {
 			curl_easy_setopt(m_curl, CURLOPT_POST, 1);
 			curl_easy_setopt(m_curl, CURLOPT_POSTFIELDS, m_postData.data());
 			curl_easy_setopt(m_curl, CURLOPT_POSTFIELDSIZE, m_postData.size());
@@ -273,14 +242,9 @@ bool CurlRequestHelper::submitRequest(bool isPost)
 	// check response code
 	long httpCode = 0;
 	curl_easy_getinfo(m_curl, CURLINFO_RESPONSE_CODE, &httpCode);
-	m_httpStatusCode = httpCode;
 	if (httpCode != 200)
 	{
 		cemuLog_log(LogType::Force, "HTTP request received response {} but expected 200", httpCode);
-		char* effectiveUrl = nullptr;
-		curl_easy_getinfo(m_curl, CURLINFO_EFFECTIVE_URL, &effectiveUrl);
-		if (effectiveUrl)
-			cemuLog_log(LogType::Force, "Request: {}", effectiveUrl);
 		// error status codes (4xx or 5xx range) are always considered a failed request, except for code 400 which is usually returned as a response to failed logins etc.
 		if (httpCode >= 400 && httpCode <= 599 && httpCode != 400)
 			return false;

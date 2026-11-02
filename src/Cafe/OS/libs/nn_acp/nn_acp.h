@@ -1,6 +1,5 @@
 #pragma once
 #include "Cafe/IOSU/legacy/iosu_acp.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 namespace nn
 {
@@ -19,6 +18,6 @@ namespace acp
 	ACPStatus ACPCreateSaveDir(uint32 persistentId, iosu::acp::ACPDeviceType type);
 	ACPStatus ACPUpdateSaveTimeStamp(uint32 persistentId, uint64 titleId, iosu::acp::ACPDeviceType deviceType);
 
-	COSModule* GetModule();
+	void load();
 }
 }

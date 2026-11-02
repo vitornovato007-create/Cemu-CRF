@@ -1,6 +1,5 @@
 #pragma once
 #include "Cafe/OS/libs/nfc/nfc.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 #define NTAG_RESULT_SUCCESS		(0)
 #define NTAG_RESULT_UNINITIALIZED	(-0x3E7)
@@ -98,5 +97,5 @@ namespace ntag
 
 	sint32 NTAGFormat(uint32 chan, uint32 timeout, nfc::NFCUid* uid, uint32 rwSize, void* rwData, MPTR callback, void* context);
 
-	COSModule* GetModule();
+	void Initialize();
 }

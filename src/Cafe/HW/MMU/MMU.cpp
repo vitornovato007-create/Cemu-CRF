@@ -1,7 +1,5 @@
 #include "Cafe/HW/MMU/MMU.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
-#include "Cemu/Logging/CemuLogging.h"
-#include "WindowSystem.h"
 #include "util/MemMapper/MemMapper.h"
 #include "config/ActiveSettings.h"
 
@@ -91,8 +89,7 @@ void MMURange::mapMem()
 	cemu_assert_debug(!m_isMapped);
 	if (MemMapper::AllocateMemory(memory_base + baseAddress, size, MemMapper::PAGE_PERMISSION::P_RW, true) == nullptr)
 	{
-		std::string errorMsg = _tr("Unable to allocate {} memory", name);
-		WindowSystem::ShowErrorDialog(errorMsg, _tr("Error"));
+		cemuLog_log(LogType::Force, "Unable to allocate {} memory", name);
 		#if BOOST_OS_WINDOWS
 		ExitProcess(-1);
 		#else
@@ -133,7 +130,7 @@ void memory_init()
 	if( !memory_base )
 	{
 		debugBreakpoint();
-		WindowSystem::ShowErrorDialog(_tr("Unable to reserve 4GB of memory"), _tr("Error"));
+		cemuLog_log(LogType::Force, "Unable to reserve 4GB of memory");
 		exit(-1);
 	}
 	for (auto& itr : g_mmuRanges)
@@ -500,7 +497,7 @@ namespace MMU
 
 	// todo - instead of passing the physical address to Read/WriteMMIO we should pass an interface id and a relative address? This would allow remapping the hardware address (tho we can just unregister + register at different addresses)
 
-	uint32 ReadMMIO_32(PAddr address)
+	uint16 ReadMMIO_32(PAddr address)
 	{
 		cemu_assert_debug((address & 0x3) == 0);
 		auto itr = g_mmioHandlerR32->find(address);

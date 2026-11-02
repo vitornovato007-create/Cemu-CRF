@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -12,6 +13,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -32,16 +38,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.R
-import info.cemu.cemu.common.customdrivers.DriverMetadata
-import info.cemu.cemu.common.ui.components.ScreenContentLazy
-import info.cemu.cemu.common.ui.localization.tr
+import info.cemu.cemu.guicore.components.ScreenContentLazy
 import kotlinx.coroutines.launch
 
 @Composable
@@ -62,9 +66,9 @@ fun CustomDriversScreen(
 
             customDriversViewModel.installDriver(context, uri) { installStatus ->
                 val message = when (installStatus) {
-                    DriverInstallStatus.AlreadyInstalled -> tr("Driver already installed")
-                    DriverInstallStatus.ErrorInstalling -> tr("Failed to install driver")
-                    DriverInstallStatus.Installed -> tr("Driver installed successfully")
+                    DriverInstallStatus.AlreadyInstalled -> "Driver already installed"
+                    DriverInstallStatus.ErrorInstalling -> "Failed to install driver"
+                    DriverInstallStatus.Installed -> "Driver installed successfully"
                 }
 
                 coroutineScope.launch {
@@ -76,13 +80,13 @@ fun CustomDriversScreen(
 
     ScreenContentLazy(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        appBarText = tr("Custom drivers"),
+        appBarText = "Custom drivers",
         navigateBack = navigateBack,
         actions = {
             IconButton(onClick = { customDriversInstallLauncher.launch(arrayOf("application/zip")) }) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_add),
-                    contentDescription = null
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Add custom driver",
                 )
             }
         },
@@ -110,14 +114,14 @@ fun CustomDriversScreen(
 private fun DriverInstallProgressDialog() {
     AlertDialog(
         title = {
-            Text(tr("Installing"))
+            Text("Installing")
         },
         text = {
             Column(
                 modifier = Modifier.padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(tr("Installing driver in progress"))
+                Text("Installing driver in progress")
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -134,7 +138,7 @@ private fun DriverInstallProgressDialog() {
 @Composable
 private fun SystemDriverListItem(selected: Boolean, onSelect: () -> Unit) {
     DriverListItem(
-        driverLabel = tr("System driver"),
+        driverLabel = "System driver",
         selected = selected,
         onSelect = onSelect
     )
@@ -152,14 +156,14 @@ private fun CustomDriverListItem(driver: Driver, onDelete: () -> Unit, onSelect:
             IconButton(onClick = { showDriverInfo = !showDriverInfo }) {
                 Icon(
                     modifier = Modifier.rotate(if (showDriverInfo) 180f else 0f),
-                    painter = painterResource(R.drawable.ic_arrow_drop_down),
-                    contentDescription = null
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = "Show driver metadata"
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_delete),
-                    contentDescription = null
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(R.string.remove_game_path),
                 )
             }
         }
@@ -211,12 +215,12 @@ private fun DriverMetadataInfo(metadata: DriverMetadata) {
             .fillMaxWidth()
             .padding(8.dp)
     ) {
-        DriverMetadataInfo(tr("Description"), metadata.description)
-        DriverMetadataInfo(tr("Author"), metadata.author)
-        DriverMetadataInfo(tr("Package version"), metadata.packageVersion)
-        DriverMetadataInfo(tr("Vendor"), metadata.vendor)
-        DriverMetadataInfo(tr("Driver version"), metadata.driverVersion)
-        DriverMetadataInfo(tr("Min api"), metadata.minApi)
+        DriverMetadataInfo("Description", metadata.description)
+        DriverMetadataInfo("Author", metadata.author)
+        DriverMetadataInfo("Package version", metadata.packageVersion)
+        DriverMetadataInfo("Vendor", metadata.vendor)
+        DriverMetadataInfo("Driver version", metadata.driverVersion)
+        DriverMetadataInfo("Min api", metadata.minApi)
     }
 }
 

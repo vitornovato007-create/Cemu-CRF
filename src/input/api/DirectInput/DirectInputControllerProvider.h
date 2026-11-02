@@ -4,7 +4,6 @@
 #define DIRECTINPUT_VERSION 0x0800
 
 #include <dinput.h>
-#include <wrl/client.h>
 
 #include "input/api/ControllerProvider.h"
 
@@ -23,7 +22,7 @@ public:
 
 	std::vector<std::shared_ptr<ControllerBase>> get_controllers() override;
 
-	IDirectInput8W* get_dinput() const { return m_dinput8.Get(); }
+	IDirectInput8* get_dinput() const { return m_dinput8; }
 	LPCDIDATAFORMAT get_data_format() const;
 
 private:
@@ -32,7 +31,7 @@ private:
 	decltype(&DirectInput8Create) m_DirectInput8Create;
 	decltype(&GetdfDIJoystick) m_GetdfDIJoystick = nullptr;
 
-	Microsoft::WRL::ComPtr<IDirectInput8W> m_dinput8;
+	IDirectInput8* m_dinput8 = nullptr;
 };
 
 #endif

@@ -1,4 +1,6 @@
 #pragma once
+
+#include <utility>
 #include "config/CemuConfig.h"
 #include "config/NetworkSettings.h"
 
@@ -56,7 +58,7 @@ public:
 
 	[[nodiscard]] static fs::path GetMlcPath();
 
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 	template <typename ...TArgs>
 	[[nodiscard]] static fs::path GetNativeLibPath(TArgs&&... args){ return GetPath(s_native_lib_path, std::forward<TArgs>(args)...); };
 
@@ -82,14 +84,14 @@ private:
 	inline static fs::path s_data_path;
 	inline static fs::path s_executable_filename; // cemu.exe
 	inline static fs::path s_mlc_path;
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 	inline static fs::path s_native_lib_path;
 	inline static fs::path s_internal_dir_path;
 #endif
 
 public:
 
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
   static void SetNativeLibPath(const fs::path& nativeLibPath);
   static void SetInternalDir(const fs::path& internalDirPath);
 #endif
@@ -99,6 +101,7 @@ public:
 	// general
 	[[nodiscard]] static bool LoadSharedLibrariesEnabled();
 	[[nodiscard]] static bool DisplayDRCEnabled();
+	[[nodiscard]] static bool FullscreenEnabled();
 
 	// cpu
 	[[nodiscard]] static CPUMode GetCPUMode();
@@ -111,10 +114,6 @@ public:
 	[[nodiscard]] static bool RenderUpsideDownEnabled();
 	[[nodiscard]] static bool WaitForGX2DrawDoneEnabled();
 	[[nodiscard]] static GraphicAPI GetGraphicsAPI();
-
-	// gamma
-	[[nodiscard]] static float GetTVGamma();
-	[[nodiscard]] static float GetDRCGamma();
 
 	// audio
 	[[nodiscard]] static bool AudioOutputOnlyAux();

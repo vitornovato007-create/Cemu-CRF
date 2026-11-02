@@ -37,7 +37,6 @@ add_library(CemuUtil
   helpers/StringParser.h
   helpers/SystemException.h
   helpers/TempState.h
-  helpers/ZArchiveHelpers.h
   highresolutiontimer/HighResolutionTimer.cpp
   highresolutiontimer/HighResolutionTimer.h
   ImageWriter/bmp.h
@@ -76,12 +75,7 @@ if(WIN32)
 	target_sources(CemuUtil PRIVATE MemMapper/MemMapperWin.cpp)
 	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoWin.cpp)
 elseif(UNIX)
-  if(ANDROID)
-    target_sources(CemuUtil PRIVATE Fiber/FiberFContext.cpp)
-    target_link_libraries(CemuUtil PRIVATE Boost::context)
-  else()
-    target_sources(CemuUtil PRIVATE Fiber/FiberUContext.cpp)
-  endif()
+  target_sources(CemuUtil PRIVATE Fiber/FiberUnix.cpp)
 	target_sources(CemuUtil PRIVATE MemMapper/MemMapperUnix.cpp)
 	target_sources(CemuUtil PRIVATE SystemInfo/SystemInfoUnix.cpp)
 	if(NOT APPLE)
@@ -95,10 +89,17 @@ endif()
 
 set_property(TARGET CemuUtil PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-cemu_use_precompiled_header(CemuUtil)
-
 target_include_directories(CemuUtil PUBLIC "../")
 
+if(ANDROID)
+  target_link_libraries(CemuUtil PRIVATE libucontext)
+	add_compile_definitions("USE_LIBUCONTEXT=1")
+endif()
+
 target_link_libraries(CemuUtil PRIVATE
-  CemuCommon
+	CemuCommon
+	CemuConfig
+	Boost::headers
+	Boost::nowide
+	OpenSSL::Crypto
 )

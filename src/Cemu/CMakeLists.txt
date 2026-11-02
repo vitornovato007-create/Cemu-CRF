@@ -1,14 +1,17 @@
 add_library(CemuComponents
+  DiscordPresence/DiscordPresence.cpp
+  DiscordPresence/DiscordPresence.h
   ExpressionParser/ExpressionParser.cpp
   ExpressionParser/ExpressionParser.h
   FileCache/FileCache.cpp
   FileCache/FileCache.h
+  GuiSystem/GuiSystem.cpp
+  GuiSystem/GuiSystem.h
   Logging/CemuDebugLogging.h
   Logging/CemuLogging.cpp
   Logging/CemuLogging.h
   napi/napi_act.cpp
   napi/napi_ec.cpp
-  napi/napi.cpp
   napi/napi.h
   napi/napi_helper.cpp
   napi/napi_helper.h
@@ -31,24 +34,26 @@ add_library(CemuComponents
   Tools/DownloadManager/DownloadManager.h
 )
 
-if(ENABLE_DISCORD_RPC)
-target_sources(CemuComponents PRIVATE
-		DiscordPresence/DiscordPresence.cpp
-		DiscordPresence/DiscordPresence.h
-		DiscordPresence/DiscordRPCLite.cpp
-		DiscordPresence/DiscordRPCLite.h)
-endif()
-
 set_property(TARGET CemuComponents PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-cemu_use_precompiled_header(CemuComponents)
 
 target_include_directories(CemuComponents PUBLIC "../")
 
 target_link_libraries(CemuComponents PRIVATE
+	CemuCafe
 	CemuCommon
-  CemuGui
+	CemuConfig
+	CemuUtil
+	Boost::headers
+	CURL::libcurl
+	OpenSSL::Crypto
+	OpenSSL::SSL
+	pugixml::pugixml
+	ZLIB::ZLIB
 )
 
 # PUBLIC because fmt/format.h is included in ExpressionParser/ExpressionParser.h
 target_link_libraries(CemuComponents PUBLIC fmt::fmt)
+
+if(ENABLE_DISCORD_RPC)
+	target_link_libraries(CemuComponents PRIVATE discord-rpc)
+endif()

@@ -1,7 +1,5 @@
 #include "Cafe/GraphicPack/GraphicPack2.h"
-#include "Cemu/Logging/CemuLogging.h"
 #include "Common/FileStream.h"
-#include "WindowSystem.h"
 #include "util/helpers/StringParser.h"
 #include "Cemu/PPCAssembler/ppcAssembler.h"
 #include "Cafe/OS/RPL/rpl_structs.h"
@@ -43,9 +41,9 @@ void PatchErrorHandler::showStageErrorMessageBox()
 	if (m_gp)
 	{
 		if (m_stage == STAGE::PARSER)
-			errorMsg.assign(_tr("Failed to load patches for graphic pack \'{}\'", m_gp->GetName()));
+			errorMsg = fmt::format("Failed to load patches for graphic pack \'{}\'", m_gp->GetName());
 		else
-			errorMsg.assign(_tr("Failed to apply patches for graphic pack \'{}\'", m_gp->GetName()));
+			errorMsg = fmt::format("Failed to apply patches for graphic pack \'{}\'", m_gp->GetName());
 	}
 	else
 	{
@@ -53,17 +51,14 @@ void PatchErrorHandler::showStageErrorMessageBox()
 	}
 	if (cemuLog_isLoggingEnabled(LogType::Patches))
 	{
-		errorMsg.append("\n \n")
-			.append(_tr("Details:"))
-			.append("\n");
+		errorMsg += "\n\nDetails:\n";
 		for (auto& itr : errorMessages)
 		{
 			errorMsg += itr;
 			errorMsg += "\n";
 		}
 	}
-
-	WindowSystem::ShowErrorDialog(errorMsg, _tr("Graphic pack error"), WindowSystem::ErrorCategory::GRAPHIC_PACKS);
+	cemuLog_log(LogType::Force, "Graphic pack error: {}", errorMsg);
 }
 
 // loads Cemu-style patches (patch_<anything>.asm)
@@ -172,7 +167,7 @@ void GraphicPack2::ApplyPatchesForModule(const RPLModule* rpl)
 	std::vector<PatchGroup*> list_groups;
 	for (auto itr : list_patchGroups)
 	{
-		if (itr->matchesCRC(rpl->patchCRC) || (itr->m_isRpxOnlyTarget && rpl->IsRPX()))
+		if (itr->matchesCRC(rpl->patchCRC))
 			list_groups.emplace_back(itr);
 	}
 	// apply all groups at once
@@ -188,7 +183,7 @@ void GraphicPack2::RevertPatchesForModule(const RPLModule* rpl)
 	std::vector<PatchGroup*> list_groups;
 	for (auto itr : list_patchGroups)
 	{
-		if (itr->matchesCRC(rpl->patchCRC) || (itr->m_isRpxOnlyTarget && rpl->IsRPX()))
+		if (itr->matchesCRC(rpl->patchCRC))
 			list_groups.emplace_back(itr);
 	}
 	// undo all groups at once

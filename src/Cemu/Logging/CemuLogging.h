@@ -1,8 +1,6 @@
 #pragma once
 
-#include <atomic>
-
-extern std::atomic<uint64> s_loggingFlagMask;
+extern uint64 s_loggingFlagMask;
 
 enum class LogType : sint32
 {
@@ -54,7 +52,7 @@ enum class LogType : sint32
 template <>
 struct fmt::formatter<std::u8string_view> : formatter<string_view> {
 	template <typename FormatContext>
-	auto format(std::u8string_view v, FormatContext& ctx)
+	auto format(std::u8string_view v, FormatContext& ctx) 
 	{
 		string_view s((char*)v.data(), v.size());
 		return formatter<string_view>::format(s, ctx);
@@ -73,29 +71,50 @@ inline uint64 cemuLog_getFlag(LogType type)
 
 inline bool cemuLog_isLoggingEnabled(LogType type)
 {
-	return (s_loggingFlagMask.load(std::memory_order_relaxed) & cemuLog_getFlag(type)) != 0;
+	return (s_loggingFlagMask & cemuLog_getFlag(type)) != 0;
 }
 
 bool cemuLog_log(LogType type, std::string_view text);
 bool cemuLog_log(LogType type, std::u8string_view text);
 void cemuLog_waitForFlush(); // wait until all log lines are written
 
-template<typename... TArgs>
-bool cemuLog_log(LogType type, fmt::format_string<TArgs...> formatStr, TArgs&&... args)
+template<typename T, typename ... TArgs>
+bool cemuLog_log(LogType type, std::basic_string<T> formatStr, TArgs&&... args)
 {
 	if (!cemuLog_isLoggingEnabled(type))
 		return false;
-
-	cemuLog_log(type, fmt::format(formatStr, std::forward<TArgs>(args)...));
-
+	if constexpr (sizeof...(TArgs) == 0)
+	{
+		cemuLog_log(type, std::basic_string_view<T>(formatStr.data(), formatStr.size()));
+		return true;
+	}
+	else
+	{
+		const auto format_view = fmt::basic_string_view<T>(formatStr);
+#if FMT_VERSION >= 110000
+		const auto text = fmt::vformat(format_view, fmt::make_format_args<fmt::buffered_context<T>>(args...));
+#else
+		const auto text = fmt::vformat(format_view, fmt::make_format_args<fmt::buffer_context<T>>(args...));
+#endif
+		cemuLog_log(type, std::basic_string_view(text.data(), text.size()));
+	}
 	return true;
+}
+ 
+template<typename T, typename ... TArgs>
+bool cemuLog_log(LogType type, const T* format, TArgs&&... args)
+{
+	if (!cemuLog_isLoggingEnabled(type))
+		return false;
+	auto format_str = std::basic_string<T>(format);
+	return cemuLog_log(type, format_str, std::forward<TArgs>(args)...);
 }
 
 #define cemuLog_logOnce(...) { static bool _not_first_call = false; if (!_not_first_call) { _not_first_call = true; cemuLog_log(__VA_ARGS__); } }
 
 // same as cemuLog_log, but only outputs in debug mode
-template<typename ... TArgs>
-bool cemuLog_logDebug(LogType type, fmt::format_string<TArgs...> format, TArgs&&... args)
+template<typename TFmt, typename ... TArgs>
+bool cemuLog_logDebug(LogType type, TFmt format, TArgs&&... args)
 {
 #ifdef CEMU_DEBUG_ASSERT
 	return cemuLog_log(type, format, std::forward<TArgs>(args)...);
@@ -104,19 +123,17 @@ bool cemuLog_logDebug(LogType type, fmt::format_string<TArgs...> format, TArgs&&
 #endif
 }
 
-inline bool cemuLog_logDebug(LogType type, std::string_view message)
+class LogCallbacks
 {
-#ifdef CEMU_DEBUG_ASSERT
-	return cemuLog_log(type, message);
-#else
-	return false;
-#endif
-}
+public:
+	virtual void Log(std::string_view filter, std::string_view message) = 0;
+	virtual void Log(std::string_view filter, std::wstring_view message) = 0;
+};
+
+void cemuLog_registerLogCallbacks(LogCallbacks* logCallbacks);
+void cemuLog_unregisterLogCallbacks();
 
 #define cemuLog_logDebugOnce(...) { static bool _not_first_call = false; if (!_not_first_call) { _not_first_call = true; cemuLog_logDebug(__VA_ARGS__); } }
-
-// utility function for logging binary data as a hex dump
-void cemuLog_logHexDump(LogType type, const void* data, size_t size, size_t lineSize = 16);
 
 // cafe lib calls
 bool cemuLog_advancedPPCLoggingEnabled();
@@ -127,15 +144,5 @@ fs::path cemuLog_GetLogFilePath();
 void cemuLog_createLogFile(bool triggeredByCrash);
 [[nodiscard]] std::unique_lock<std::recursive_mutex> cemuLog_acquire(); // used for logging multiple lines at once
 
-class LoggingCallbacks
-{
-  public:
-	virtual void Log(std::string_view filter, std::string_view message) {};
-	virtual void Log(std::string_view filter, std::wstring_view message) {};
-	virtual ~LoggingCallbacks() = default;
-};
-
-void cemuLog_setCallbacks(LoggingCallbacks* loggingCallbacks);
-void cemuLog_clearCallbacks();
-// Dispatch crash-report text to platform logging callbacks without duplicating it in log.txt.
+// Forward crash report text to the Android diagnostic capture callback.
 void cemuLog_dispatchCrashText(std::string_view text);

@@ -12,6 +12,7 @@
 #include "util/helpers/Semaphore.h"
 #include "util/containers/flat_hash_map.hpp"
 #include "util/containers/robin_hood.h"
+#include "Cemu/GuiSystem/GuiSystem.h"
 
 struct VkSupportedFormatInfo_t
 {
@@ -78,11 +79,11 @@ public:
 		return true;
 	}
 
-
+	
 	template<typename T>
 	struct direct_hash
 	{
-		size_t operator()(const uint64& k) const noexcept
+		size_t operator()(const uint64& k) const noexcept 
 		{
 			return k;
 		}
@@ -123,11 +124,6 @@ public:
 
 	// hack - accurate barrier needed for this pipeline
 	bool neverSkipAccurateBarrier{false};
-};
-
-namespace WindowSystem
-{
-	struct WindowHandleInfo;
 };
 
 class VulkanRenderer : public Renderer
@@ -206,21 +202,20 @@ public:
 #if BOOST_OS_WINDOWS
 	static VkSurfaceKHR CreateWinSurface(VkInstance instance, HWND hwindow);
 #endif
-#if BOOST_PLAT_ANDROID
+#if BOOST_OS_LINUX
+#if __ANDROID__
 	static VkSurfaceKHR CreateAndroidSurface(VkInstance instance, ANativeWindow* window);
-#elif BOOST_OS_LINUX || BOOST_OS_BSD
+#else
 	static VkSurfaceKHR CreateXlibSurface(VkInstance instance, Display* dpy, Window window);
     static VkSurfaceKHR CreateXcbSurface(VkInstance instance, xcb_connection_t* connection, xcb_window_t window);
 #ifdef HAS_WAYLAND
 	static VkSurfaceKHR CreateWaylandSurface(VkInstance instance, wl_display* display, wl_surface* surface);
 #endif // HAS_WAYLAND
-#endif
+#endif // __ANDROID__
+#endif // BOOST_OS_LINUX
 
-#if BOOST_PLAT_ANDROID
-	static VkSurfaceKHR CreateFramebufferSurface(VkInstance instance, struct WindowSystem::WindowHandleInfo& windowInfo, ANativeWindow** nativeWindow = nullptr);
-#else
-	static VkSurfaceKHR CreateFramebufferSurface(VkInstance instance, struct WindowSystem::WindowHandleInfo& windowInfo);
-#endif
+	static VkSurfaceKHR CreateFramebufferSurface(VkInstance instance, GuiSystem::WindowHandleInfo& windowInfo);
+
 	void AppendOverlayDebugInfo() override;
 
 	void ImguiInit();
@@ -292,6 +287,7 @@ public:
 	// texture functions
 	void* texture_acquireTextureUploadBuffer(uint32 size) override;
 	void texture_releaseTextureUploadBuffer(uint8* mem) override;
+	
 
 	TextureDecoder* texture_chooseDecodedFormat(Latte::E_GX2SURFFMT format, bool isDepth, Latte::E_DIM dim, uint32 width, uint32 height) override;
 
@@ -385,7 +381,7 @@ private:
 		VkRect2D currentScissorRect{};
 
 		// vertex bindings
-		struct
+		struct  
 		{
 			uint32 offset;
 		}currentVertexBinding[LATTE_MAX_VERTEX_BUFFERS]{};
@@ -490,19 +486,18 @@ private:
 			bool debug_utils = false; // VK_EXT_DEBUG_UTILS
 		}instanceExtensions;
 
-		struct
+		struct  
 		{
 			bool useTFEmulationViaSSBO = true; // emulate transform feedback via shader writes to a storage buffer
 		}mode;
 
-		struct
+		struct  
 		{
 			uint32 minUniformBufferOffsetAlignment = 256;
 			uint32 nonCoherentAtomSize = 256;
 		}limits;
 
-		bool usingDebugMarkerTool{ false }; // validation layer or other tool capable of handling debug markers is used
-		bool usingTracingTool{ false }; // frame debugger or other API replaying tool is used
+		bool debugMarkersSupported{ false }; // frame debugger is attached
 		bool disableMultithreadedCompilation{ false }; // for old nvidia drivers
 
 	}m_featureControl{};
@@ -526,7 +521,7 @@ private:
 	void CreateCommandBuffers();
 
 	void swapchain_createDescriptorSetLayout();
-
+	
 	// shader
 
 	bool IsAsyncPipelineAllowed(uint32 numIndices);
@@ -540,8 +535,6 @@ private:
 	void DeleteTexture(ImTextureID id) override;
 	void DeleteFontTextures() override;
 	bool BeginFrame(bool mainWindow) override;
-
-	bool UseTFViaSSBO() const override { return m_featureControl.mode.useTFEmulationViaSSBO; }
 
 	// drawcall emulation
 	PipelineInfo* draw_createGraphicsPipeline(uint32 indexCount);
@@ -574,7 +567,6 @@ private:
 	VkCommandBuffer getCurrentCommandBuffer() const { return m_state.currentCommandBuffer; }
 
 	// uniform
-	uint32 uniformData_uploadUniformDataBufferGetOffset(std::span<uint8, std::dynamic_extent> data);
 	void uniformData_updateUniformVars(uint32 shaderStageIndex, LatteDecompilerShader* shader);
 
 	// misc
@@ -606,7 +598,7 @@ private:
 	VkDevice  m_logicalDevice = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT m_debugCallback = nullptr;
 	volatile bool m_destructionRequested = false;
-
+	
 	QueueFamilyIndices m_indices{};
 
 	Semaphore m_pipeline_cache_semaphore;
@@ -617,7 +609,7 @@ private:
 	std::unordered_map<uint64, VkDescriptorSet> m_backbufferBlitDescriptorSetCache;
 	VkPipelineLayout m_pipelineLayout{nullptr};
 	VkCommandPool m_commandPool{ nullptr };
-
+	
 	// buffer to cache uniform vars
 	VkBuffer m_uniformVarBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_uniformVarBufferMemory = VK_NULL_HANDLE;
@@ -689,19 +681,19 @@ private:
 	bool m_submitOnIdle{}; // submit current buffer if Latte command processor goes into idle state (no more commands or waiting for externally signaled condition)
 
 	// tracking for dynamic offsets
-	struct
+	struct  
 	{
 		uint32 uniformVarBufferOffset[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
-		struct
+		struct  
 		{
 			uint32 uniformBufferOffset[LATTE_NUM_MAX_UNIFORM_BUFFERS];
 		}shaderUB[VulkanRendererConst::SHADER_STAGE_INDEX_COUNT];
 	}dynamicOffsetInfo{};
 
 	// streamout
-	struct
+	struct  
 	{
-		struct
+		struct  
 		{
 			bool enabled;
 			uint32 ringBufferOffset;
@@ -751,11 +743,11 @@ private:
 		accessFlags = 0;
 		if constexpr ((TSyncOp & BUFFER_SHADER_READ) != 0)
 		{
-			// in theory: VK_ACCESS_INDEX_READ_BIT should be set here too but indices are currently separated
+			// in theory: VK_ACCESS_INDEX_READ_BIT should be set here too but indices are currently separated			
 			stages |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			accessFlags |= VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
 		}
-
+		
 		if constexpr ((TSyncOp & BUFFER_SHADER_WRITE) != 0)
 		{
 			stages |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -958,9 +950,9 @@ private:
 
 public:
 	bool GetDisableMultithreadedCompilation() const { return m_featureControl.disableMultithreadedCompilation; }
+	bool UseTFViaSSBO() const { return m_featureControl.mode.useTFEmulationViaSSBO; }
 	bool HasSPRIVRoundingModeRTE32() const { return m_featureControl.shaderFloatControls.shaderRoundingModeRTEFloat32; }
-	bool IsDebugMarkersEnabled() const { return m_featureControl.usingDebugMarkerTool; }
-	bool IsTracingToolEnabled() const { return m_featureControl.usingTracingTool; }
+	bool IsDebugUtilsEnabled() const { return m_featureControl.debugMarkersSupported && m_featureControl.instanceExtensions.debug_utils; }
 
 private:
 
@@ -968,7 +960,7 @@ private:
 	void debug_genericBarrier();
 
 	// shaders
-	struct
+	struct  
 	{
 		RendererShaderVk* copySurface_vs{};
 		RendererShaderVk* copySurface_psDepth2Color{};

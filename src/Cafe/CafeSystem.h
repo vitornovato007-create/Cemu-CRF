@@ -1,10 +1,11 @@
 #pragma once
 #include "Cafe/OS/RPL/rpl.h"
+#include "util/helpers/Semaphore.h"
 #include "Cafe/TitleList/TitleId.h"
+#include "config/CemuConfig.h"
 
 enum class CosCapabilityBits : uint64;
 enum class CosCapabilityGroup : uint32;
-enum class CafeConsoleRegion;
 
 namespace CafeSystem
 {
@@ -40,9 +41,6 @@ namespace CafeSystem
 	PREPARE_STATUS_CODE PrepareForegroundTitleFromStandaloneRPX(const fs::path& path);
 	void LaunchForegroundTitle();
 	bool IsTitleRunning();
-
-	void PauseTitle();
-	void ResumeTitle();
 
 	bool GetOverrideArgStr(std::vector<std::string>& args);
 	void SetOverrideArgs(std::span<std::string> args);

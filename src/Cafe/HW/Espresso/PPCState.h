@@ -230,9 +230,9 @@ static inline float flushDenormalToZero(float f)
 
 // HLE interface
 
-using HLECALL = void(*)(PPCInterpreter_t*);
-using HLEIDX = sint32;
+typedef void(*HLECALL)(PPCInterpreter_t* hCPU);
 
+typedef sint32 HLEIDX;
 HLEIDX PPCInterpreter_registerHLECall(HLECALL hleCall, std::string hleName);
 HLECALL PPCInterpreter_getHLECall(HLEIDX funcIndex);
 

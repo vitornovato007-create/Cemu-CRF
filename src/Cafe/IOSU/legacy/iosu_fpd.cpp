@@ -10,7 +10,7 @@
 #include "util/helpers/StringHelpers.h"
 #include "Cafe/IOSU/iosu_types_common.h"
 #include "Cafe/IOSU/nn/iosu_nn_service.h"
-#include "Common/socket.h"
+
 #include "Common/CafeString.h"
 
 std::mutex g_friend_notification_mutex;
@@ -132,7 +132,7 @@ namespace iosu
 
 		void convertMultiByteStringToBigEndianWidechar(const char* input, uint16be* output, sint32 maxOutputLength)
 		{
-			std::vector<uint16be> beStr = StringHelpers::FromUtf8(input);
+			std::basic_string<uint16be> beStr = StringHelpers::FromUtf8(input);
 			if (beStr.size() >= maxOutputLength - 1)
 				beStr.resize(maxOutputLength-1);
 			for (size_t i = 0; i < beStr.size(); i++)
@@ -723,7 +723,7 @@ namespace iosu
 			{
 				if(numVecIn != 0 || numVecOut != 1)
 					return FPResult_InvalidIPCParam;
-				std::vector<uint16be> myComment;
+				std::basic_string<uint16be> myComment;
 				if(g_fpd.nexFriendSession)
 				{
 					if(vecOut->size != MY_COMMENT_LENGTH * sizeof(uint16be))
@@ -735,8 +735,8 @@ namespace iosu
 					g_fpd.nexFriendSession->getMyComment(myNexComment);
 					myComment = StringHelpers::FromUtf8(myNexComment.commentString);
 				}
-				myComment.insert(myComment.begin(), '\0');
-				memcpy(vecOut->basePhys.GetPtr(), myComment.data(), MY_COMMENT_LENGTH * sizeof(uint16be));
+				myComment.insert(0, 1, '\0');
+				memcpy(vecOut->basePhys.GetPtr(), myComment.c_str(), MY_COMMENT_LENGTH * sizeof(uint16be));
 				return FPResult_Ok;
 			}
 

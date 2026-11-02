@@ -8,7 +8,7 @@ namespace GX2
 	void GX2EventInit();
 	void GX2WaitForVsync();
 	void GX2WaitForFlip();
-	bool GX2DrawDone();
+	void GX2DrawDone();
 
 	enum class GX2CallbackEventType
 	{

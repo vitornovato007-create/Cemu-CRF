@@ -22,7 +22,7 @@ constexpr T bswap(T i)
 template <typename T>
 constexpr T SwapEndian(T value)
 {
-	if constexpr (std::is_integral_v<T>)
+	if constexpr (std::is_integral<T>::value)
 	{
 #ifdef _MSC_VER
 		if constexpr (sizeof(T) == sizeof(uint32_t))
@@ -33,7 +33,7 @@ constexpr T SwapEndian(T value)
 
 		return (T)bswap((std::make_unsigned_t<T>)value);
 	}
-	else if constexpr (std::is_floating_point_v<T>)
+	else if constexpr (std::is_floating_point<T>::value)
 	{
 		if constexpr (sizeof(T) == sizeof(uint32_t))
 		{
@@ -46,18 +46,18 @@ constexpr T SwapEndian(T value)
 			return *(T*)&tmp;
 		}
 	}
-	else if constexpr (std::is_enum_v<T>)
+	else if constexpr (std::is_enum<T>::value)
 	{
 		return (T)SwapEndian((std::underlying_type_t<T>)value);
 	}
-	else if constexpr (std::is_base_of_v<Latte::LATTEREG, T>)
+	else if constexpr (std::is_base_of<Latte::LATTEREG, T>::value)
 	{
 		const auto tmp = bswap<uint32_t>(*(uint32_t*)&value);
 		return *(T*)&tmp;
 	}
     else
     {
-        static_assert(std::is_integral_v<T>, "unsupported betype specialization!");
+        static_assert(std::is_integral<T>::value, "unsupported betype specialization!");
     }
 
 	return value;
@@ -171,31 +171,31 @@ public:
 		return tmp;
 	}
 
-	betype<T>& operator^=(const betype<T>& v) requires std::integral<T>
+	betype<T>& operator^=(const betype<T>& v) requires std::is_integral_v<T>
 	{
 		m_value ^= v.m_value;
 		return *this;
 	}
 
-	betype<T>& operator>>=(std::size_t idx) requires std::integral<T>
+	betype<T>& operator>>=(std::size_t idx) requires std::is_integral_v<T>
 	{
 		m_value = SwapEndian(T(value() >> idx));
 		return *this;
 	}
 
-	betype<T>& operator<<=(std::size_t idx) requires std::integral<T>
+	betype<T>& operator<<=(std::size_t idx) requires std::is_integral_v<T>
 	{
 		m_value = SwapEndian(T(value() << idx));
 		return *this;
 	}
 
-	betype<T> operator~() const requires std::integral<T>
+	betype<T> operator~() const requires std::is_integral_v<T>
 	{
 		return from_bevalue(T(~m_value));
 	}
 
 	// pre-increment
-	betype<T>& operator++() requires std::integral<T>
+	betype<T>& operator++() requires std::is_integral_v<T>
 	{
 		m_value = SwapEndian(T(value() + 1));
 		return *this;
@@ -210,7 +210,7 @@ public:
 	}
 
 	// pre-decrement
-	betype<T>& operator--() requires std::integral<T>
+	betype<T>& operator--() requires std::is_integral_v<T>
 	{
 		m_value = SwapEndian(T(value() - 1));
 		return *this;

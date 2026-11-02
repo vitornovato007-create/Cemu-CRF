@@ -1,4 +1,3 @@
-#include "Cafe/OS/RPL/COSModule.h"
 
 namespace proc_ui
 {
@@ -41,5 +40,5 @@ namespace proc_ui
 	ProcUIStatus ProcUIProcessMessages(bool isBlockingInBackground);
 	ProcUIStatus ProcUISubProcessMessages(bool isBlockingInBackground);
 
-	COSModule* GetModule();
+	void load();
 }

@@ -1,12 +1,11 @@
 #pragma once
 
 #include "util/math/vector3.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 namespace padscore
 {
 	void start();
-	COSModule* GetModule();
+	void load();
 }
 
 constexpr int kWPADMaxControllers = 4;

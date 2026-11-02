@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Cafe/OS/libs/padscore/padscore.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 namespace vpad
 {
@@ -85,8 +84,3 @@ typedef struct VPADStatus
 }VPADStatus_t;
 
 static_assert(sizeof(VPADStatus) == 0xAC);
-
-namespace vpad
-{
-	COSModule* GetModule();
-}

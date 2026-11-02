@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Cafe/OS/RPL/COSModule.h"
-
 // CEMU NFC error codes
 #define NFC_TOUCH_TAG_ERROR_NONE			(0)
 #define NFC_TOUCH_TAG_ERROR_NO_ACCESS			(1)
@@ -88,7 +86,7 @@ namespace nfc
 
 	sint32 NFCWrite(uint32 chan, uint32 discoveryTimeout, NFCUid* uid, NFCUid* uidMask, uint32 size, void* data, MPTR callback, void* context);
 
-	COSModule* GetModule();
+	void Initialize();
 
 	bool TouchTagFromFile(const fs::path& filePath, uint32* nfcError);
 }

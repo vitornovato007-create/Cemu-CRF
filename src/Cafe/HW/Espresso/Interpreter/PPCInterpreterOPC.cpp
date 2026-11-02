@@ -93,6 +93,7 @@ void PPCInterpreter_MTCRF(PPCInterpreter_t* hCPU, uint32 Opcode)
 {
 	// frequently used by GCC compiled code (e.g. SM64 port)
 	// tested
+
 	uint32 rS;
 	uint32 crfMask;
 	PPC_OPC_TEMPL_XFX(Opcode, rS, crfMask);

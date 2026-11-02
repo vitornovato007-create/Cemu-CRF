@@ -1,3 +1,5 @@
+#pragma once
+
 #include "nn_olv_InitializeTypes.h"
 #include "CafeSystem.h"
 #include "Cafe/OS/libs/nn_act/nn_act.h"
@@ -14,10 +16,10 @@ namespace nn
 		ParamPackStorage g_ParamPack;
 		DiscoveryResultStorage g_DiscoveryResults;
 
-		sint32 GetOlvAccessKey(uint32* pOutKey)
+		sint32 GetOlvAccessKey(uint32_t* pOutKey)
 		{
 			*pOutKey = 0;
-			uint32 accessKey = CafeSystem::GetForegroundTitleOlvAccesskey();
+			uint32_t accessKey = CafeSystem::GetForegroundTitleOlvAccesskey();
 			if (accessKey == -1)
 				return OLV_RESULT_STATUS(1102);
 
@@ -277,21 +279,6 @@ namespace nn
 			return OLV_RESULT_SUCCESS;
 		}
 
-		sint32 InitializePortalApp(nn::olv::PortalAppParam* pPortalAppParam, nn::olv::InitializeParam* pInitializeParam)
-		{
-			sint32 result = Initialize(pInitializeParam);
-			if (result != OLV_RESULT_SUCCESS)
-				return result;
-
-			memcpy(pPortalAppParam->m_ParamPack, g_ParamPack.encodedParamPack, sizeof(g_ParamPack.encodedParamPack));
-			memcpy(pPortalAppParam->m_ServiceToken, g_DiscoveryResults.serviceToken, sizeof(g_DiscoveryResults.serviceToken));
-
-			snprintf(reinterpret_cast<char*>(pPortalAppParam->m_StartUrl), sizeof(pPortalAppParam->m_StartUrl),
-				"%s/titles/show?src=menu", g_DiscoveryResults.portalEndpoint);
-
-			return OLV_RESULT_SUCCESS;
-		}
-
 		namespace Report
 		{
 			uint32 GetReportTypes()
@@ -310,4 +297,4 @@ namespace nn
 			return g_IsInitialized;
 		}
 	}
-}
+}

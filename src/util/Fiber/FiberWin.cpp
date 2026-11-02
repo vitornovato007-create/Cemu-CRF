@@ -1,20 +1,23 @@
-#include "FiberWin.h"
+#include "Fiber.h"
+#include <Windows.h>
 
 thread_local Fiber* sCurrentFiber{};
 
 Fiber::Fiber(void(*FiberEntryPoint)(void* userParam), void* userParam, void* privateData) : m_privateData(privateData)
 {
-	m_handle = CreateFiber(2 * 1024 * 1024, (LPFIBER_START_ROUTINE)FiberEntryPoint, userParam);
+	HANDLE fiberHandle = CreateFiber(2 * 1024 * 1024, (LPFIBER_START_ROUTINE)FiberEntryPoint, userParam);
+	this->m_implData = (void*)fiberHandle;
 }
 
 Fiber::Fiber(void* privateData) : m_privateData(privateData)
 {
-	m_handle = ConvertThreadToFiber(nullptr);
+	this->m_implData = (void*)ConvertThreadToFiber(nullptr);
+	this->m_stackPtr = nullptr;
 }
 
 Fiber::~Fiber()
 {
-	DeleteFiber(m_handle);
+	DeleteFiber((HANDLE)m_implData);
 }
 
 Fiber* Fiber::PrepareCurrentThread(void* privateData)
@@ -28,7 +31,7 @@ Fiber* Fiber::PrepareCurrentThread(void* privateData)
 void Fiber::Switch(Fiber& targetFiber)
 {
 	sCurrentFiber = &targetFiber;
-	SwitchToFiber(targetFiber.m_handle);
+	SwitchToFiber((HANDLE)targetFiber.m_implData);
 }
 
 void* Fiber::GetFiberPrivateData()

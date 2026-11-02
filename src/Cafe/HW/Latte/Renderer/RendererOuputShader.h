@@ -8,15 +8,6 @@
 class RendererOutputShader
 {
 public:
-	struct OutputUniformVariables
-	{
-		Vector2f textureSrcResolution;
-		Vector2f nativeResolution;
-		Vector2f outputResolution;
-		uint32 applySRGBEncoding;
-		float targetGamma;
-		float displayGamma;
-	};
 	enum Shader
 	{
 		kCopy,
@@ -26,7 +17,7 @@ public:
 	RendererOutputShader(const std::string& vertex_source, const std::string& fragment_source);
 	virtual ~RendererOutputShader() = default;
 
-	OutputUniformVariables FillUniformBlockBuffer(const LatteTextureView& texture_view, const Vector2i& output_res, const bool padView) const;
+	void SetUniformParameters(const LatteTextureView& texture_view, const Vector2i& output_res) const;
 
 	RendererShader* GetVertexShader() const
 	{
@@ -50,9 +41,8 @@ public:
 	static RendererOutputShader* s_hermit_shader;
 	static RendererOutputShader* s_hermit_shader_ud;
 
-	static std::string GetOpenGlVertexSource(bool render_upside_down);
 	static std::string GetVulkanVertexSource(bool render_upside_down);
-	static std::string GetMetalVertexSource(bool render_upside_down);
+	static std::string GetOpenGlVertexSource(bool render_upside_down);
 
 	static std::string PrependFragmentPreamble(const std::string& shaderSrc);
 
@@ -60,6 +50,12 @@ protected:
 	std::unique_ptr<RendererShader> m_vertex_shader;
 	std::unique_ptr<RendererShader> m_fragment_shader;
 
+	struct UniformLocations
+	{
+		sint32 m_loc_textureSrcResolution = -1;
+		sint32 m_loc_nativeResolution = -1;
+		sint32 m_loc_outputResolution = -1;
+	} m_uniformLocations[2]{};
 
 private:
 	static const std::string s_copy_shader_source;
@@ -68,8 +64,4 @@ private:
 
 	static const std::string s_bicubic_shader_source_vk;
 	static const std::string s_hermite_shader_source_vk;
-
-	static const std::string s_copy_shader_source_mtl;
-	static const std::string s_bicubic_shader_source_mtl;
-	static const std::string s_hermite_shader_source_mtl;
 };

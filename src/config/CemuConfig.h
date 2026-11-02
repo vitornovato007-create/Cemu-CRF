@@ -2,6 +2,8 @@
 
 #include "ConfigValue.h"
 #include "XMLConfig.h"
+#include "util/math/vector2.h"
+#include "Cafe/Account/Account.h"
 
 enum class NetworkService;
 
@@ -27,7 +29,7 @@ struct GameEntry
 	std::wstring save_folder;
 	std::wstring update_folder;
 	std::wstring dlc_folder;
-
+	
 	uint64 legacy_time_played = 0;
 	uint64 legacy_last_played = 0;
 
@@ -69,7 +71,6 @@ enum GraphicAPI
 {
 	kOpenGL = 0,
 	kVulkan,
-	kMetal,
 };
 
 enum AudioChannels
@@ -101,7 +102,7 @@ enum class ScreenPosition
 	kTopRight,
 	kBottomLeft,
 	kBottomCenter,
-	kBottomRight,
+	kBottomRight,	
 };
 
 enum class PrecompiledShaderOption
@@ -119,23 +120,6 @@ enum class AccurateShaderMulOption
 };
 ENABLE_ENUM_ITERATORS(AccurateShaderMulOption, AccurateShaderMulOption::False, AccurateShaderMulOption::True);
 
-enum class MetalBufferCacheMode
-{
-    Auto,
-    DevicePrivate,
-    DeviceShared,
-    Host,
-};
-ENABLE_ENUM_ITERATORS(MetalBufferCacheMode, MetalBufferCacheMode::Auto, MetalBufferCacheMode::Host);
-
-enum class PositionInvariance
-{
-    Auto,
-    False,
-    True,
-};
-ENABLE_ENUM_ITERATORS(PositionInvariance, PositionInvariance::False, PositionInvariance::True);
-
 enum class CPUMode
 {
 	SinglecoreInterpreter = 0,
@@ -147,7 +131,7 @@ enum class CPUMode
 ENABLE_ENUM_ITERATORS(CPUMode, CPUMode::SinglecoreInterpreter, CPUMode::Auto);
 
 
-enum class CPUModeLegacy
+enum class CPUModeLegacy 
 {
 	SinglecoreInterpreter = 0,
 	SinglecoreRecompiler = 1,
@@ -204,16 +188,6 @@ enum class CrashDump
 ENABLE_ENUM_ITERATORS(CrashDump, CrashDump::Disabled, CrashDump::Enabled);
 #endif
 
-#if BOOST_PLAT_ANDROID
-enum class DriverSettingMode
-{
-	Global,
-	System,
-	Custom,
-};
-ENABLE_ENUM_ITERATORS(DriverSettingMode, DriverSettingMode::Global, DriverSettingMode::Custom);
-#endif
-
 template <>
 struct fmt::formatter<PrecompiledShaderOption> : formatter<string_view> {
 	template <typename FormatContext>
@@ -238,37 +212,6 @@ struct fmt::formatter<AccurateShaderMulOption> : formatter<string_view> {
 		{
 		case AccurateShaderMulOption::True: name = "true"; break;
 		case AccurateShaderMulOption::False: name = "false"; break;
-		default: name = "unknown"; break;
-		}
-		return formatter<string_view>::format(name, ctx);
-	}
-};
-template <>
-struct fmt::formatter<MetalBufferCacheMode> : formatter<string_view> {
-	template <typename FormatContext>
-	auto format(const MetalBufferCacheMode c, FormatContext &ctx) const {
-		string_view name;
-		switch (c)
-		{
-		case MetalBufferCacheMode::Auto: name = "auto"; break;
-		case MetalBufferCacheMode::DevicePrivate: name = "device private"; break;
-		case MetalBufferCacheMode::DeviceShared: name = "device shared"; break;
-		case MetalBufferCacheMode::Host: name = "host"; break;
-		default: name = "unknown"; break;
-		}
-		return formatter<string_view>::format(name, ctx);
-	}
-};
-template <>
-struct fmt::formatter<PositionInvariance> : formatter<string_view> {
-	template <typename FormatContext>
-	auto format(const PositionInvariance c, FormatContext &ctx) const {
-		string_view name;
-		switch (c)
-		{
-		case PositionInvariance::Auto: name = "auto"; break;
-		case PositionInvariance::False: name = "false"; break;
-		case PositionInvariance::True: name = "true"; break;
 		default: name = "unknown"; break;
 		}
 		return formatter<string_view>::format(name, ctx);
@@ -315,16 +258,16 @@ struct fmt::formatter<CafeConsoleRegion> : formatter<string_view> {
 		string_view name;
 		switch (v)
 		{
-		case CafeConsoleRegion::JPN: name = TR_NOOP("Japan"); break;
-		case CafeConsoleRegion::USA: name = TR_NOOP("USA"); break;
-		case CafeConsoleRegion::EUR: name = TR_NOOP("Europe"); break;
-		case CafeConsoleRegion::AUS_DEPR: name = TR_NOOP("Australia"); break;
-		case CafeConsoleRegion::CHN: name = TR_NOOP("China"); break;
-		case CafeConsoleRegion::KOR: name = TR_NOOP("Korea"); break;
-		case CafeConsoleRegion::TWN: name = TR_NOOP("Taiwan"); break;
-		case CafeConsoleRegion::Auto: name = TR_NOOP("Auto"); break;
-		default: name = TR_NOOP("many"); break;
-
+		case CafeConsoleRegion::JPN: name = "Japan"; break;
+		case CafeConsoleRegion::USA: name = "USA"; break;
+		case CafeConsoleRegion::EUR: name = "Europe"; break;
+		case CafeConsoleRegion::AUS_DEPR: name = "Australia"; break;
+		case CafeConsoleRegion::CHN: name = "China"; break;
+		case CafeConsoleRegion::KOR: name = "Korea"; break;
+		case CafeConsoleRegion::TWN: name = "Taiwan"; break;
+		case CafeConsoleRegion::Auto: name = "Auto"; break;
+		default: name = "many"; break;
+		
 		}
 		return formatter<string_view>::format(name, ctx);
 	}
@@ -366,7 +309,7 @@ struct fmt::formatter<CrashDump> : formatter<string_view> {
 		case CrashDump::Lite: name = "Lite"; break;
 		case CrashDump::Full: name = "Full"; break;
 		default: name = "unknown"; break;
-
+		
 		}
 		return formatter<string_view>::format(name, ctx);
 	}
@@ -389,6 +332,17 @@ struct fmt::formatter<CrashDump> : formatter<string_view> {
 };
 #endif
 
+namespace DefaultColumnSize {
+	enum : uint32 {
+		name = 500u,
+		version = 60u,
+		dlc = 50u,
+		game_time = 140u,
+		game_started = 160u,
+		region = 80u,
+        title_id = 160u
+	};
+};
 
 struct CemuConfig
 {
@@ -406,8 +360,13 @@ struct CemuConfig
 	ConfigValue<bool> advanced_ppc_logging{ false };
 
 	ConfigValue<bool> permanent_storage{ true };
-
+	
+	ConfigValue<sint32> language{ 0 };
+	ConfigValue<bool> use_discord_presence{ true };
 	ConfigValue<std::string> mlc_path{};
+	ConfigValue<bool> fullscreen_menubar{ false };
+	ConfigValue<bool> fullscreen{ false };
+	ConfigValue<bool> feral_gamemode{false};
 	ConfigValue<std::string> proxy_server{};
 
 	// temporary workaround because feature crashes on macOS
@@ -420,7 +379,7 @@ struct CemuConfig
 #undef DISABLE_SCREENSAVER_DEFAULT
 	ConfigValue<bool> play_boot_sound{false};
 
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 	ConfigValue<std::string> custom_driver_path{};
 #endif
 
@@ -430,7 +389,7 @@ struct CemuConfig
 
 	// optimized access
 	std::set<uint64> game_cache_favorites; // per titleId
-
+	
 	struct _path_hash {
 		std::size_t operator()(const fs::path& path) const {
 			return fs::hash_value(path);
@@ -442,23 +401,50 @@ struct CemuConfig
 	ConfigValueBounds<CPUMode> cpu_mode{ CPUMode::Auto };
 	ConfigValueBounds<CafeConsoleLanguage> console_language{ CafeConsoleLanguage::EN };
 
+	// max 15 entries
+	static constexpr size_t kMaxRecentEntries = 15;
+	std::vector<std::string> recent_launch_files;
+	std::vector<std::string> recent_nfc_files;
+
+	Vector2i window_position{-1,-1};
+	Vector2i window_size{ -1,-1 };
+	ConfigValue<bool> window_maximized;
+
+	ConfigValue<bool> pad_open;
+	Vector2i pad_position{ -1,-1 };
+	Vector2i pad_size{ -1,-1 };
+	ConfigValue<bool> pad_maximized;
+
+	ConfigValue<bool> check_update{true};
+	ConfigValue<bool> receive_untested_updates{false};
+	ConfigValue<bool> save_screenshot{true};
+
+	ConfigValue<bool> did_show_vulkan_warning{false};
+	ConfigValue<bool> did_show_graphic_pack_download{false}; // no longer used but we keep the config value around in case people downgrade Cemu. Despite the name this was used for the Getting Started dialog
+	ConfigValue<bool> did_show_macos_disclaimer{false};
+
+	ConfigValue<bool> show_icon_column{ true };
+
+	int game_list_style = 0;
+	std::string game_list_column_order;
+	struct
+	{
+		uint32 name = DefaultColumnSize::name;
+		uint32 version = DefaultColumnSize::version;
+		uint32 dlc = DefaultColumnSize::dlc;
+		uint32 game_time = DefaultColumnSize::game_time;
+		uint32 game_started = DefaultColumnSize::game_started;
+		uint32 region = DefaultColumnSize::region;
+        uint32 title_id = 0;
+	} column_width{};
+
 	// graphics
 	ConfigValue<GraphicAPI> graphic_api{ kVulkan };
-	std::array<uint8, 16> legacy_graphic_device_uuid{}; // placeholder option for backwards compatibility with settings from 2.6 and before (renamed to "vkDevice")
-	std::array<uint8, 16> vk_graphic_device_uuid;
-	uint64 mtl_graphic_device_uuid{ 0 };
-	ConfigValue<int> vsync{ 0 }; // 0 = off, 1+ = depending on render backend
-	ConfigValue<bool> gx2drawdone_sync { true };
+	std::array<uint8, 16> graphic_device_uuid;
+	ConfigValue<int> vsync{ 0 }; // 0 = off, 1+ = on depending on render backend
+	ConfigValue<bool> gx2drawdone_sync {true};
 	ConfigValue<bool> render_upside_down{ false };
 	ConfigValue<bool> async_compile{ true };
-#if ENABLE_METAL
-	ConfigValue<bool> force_mesh_shaders{ false };
-#endif
-
-	// Gamma
-	ConfigValue<bool> overrideAppGammaPreference{ false };
-	ConfigValue<float> overrideGammaValue{ 2.2f };
-	ConfigValue<float> userDisplayGamma { 2.2f }; // 0 = sRGB, >0 gamma
 
 	ConfigValue<bool> vk_accurate_barriers{ true };
 
@@ -495,13 +481,13 @@ struct CemuConfig
 	sint32 audio_api = 0;
 	sint32 audio_delay = 2;
 	AudioChannels tv_channels = kStereo, pad_channels = kStereo, input_channels = kMono;
-	sint32 tv_volume = 50, pad_volume = 0, input_volume = 50, portal_volume = 50;
-	std::wstring tv_device{ L"default" }, pad_device, input_device, portal_device;
+	sint32 tv_volume = 50, pad_volume = 0, input_volume = 50;
+	std::wstring tv_device{ L"default" }, pad_device, input_device;
 
 	// account
 	struct
 	{
-		ConfigValueBounds<uint32> m_persistent_id{0x80000001, 0x80000001, 0xFFFFFFFF};
+		ConfigValueBounds<uint32> m_persistent_id{ Account::kMinPersistendId, Account::kMinPersistendId, 0xFFFFFFFF };
 		ConfigValue<bool> legacy_online_enabled{false};
 		ConfigValue<int> legacy_active_service{0};
 		std::unordered_map<uint32, NetworkService> service_select; // per-account service index. Key is persistentId
@@ -517,13 +503,12 @@ struct CemuConfig
 	// debug
 	ConfigValueBounds<CrashDump> crash_dump{ CrashDump::Disabled };
 	ConfigValue<uint16> gdb_port{ 1337 };
-#if ENABLE_METAL
-	ConfigValue<std::string> gpu_capture_dir{ "" };
-	ConfigValue<bool> framebuffer_fetch{ true };
-#endif
 
-	XMLConfigParser Load(XMLConfigParser& parser);
-	XMLConfigParser Save(XMLConfigParser& parser);
+	void Load(XMLConfigParser& parser);
+	void Save(XMLConfigParser& parser);
+
+	void AddRecentlyLaunchedFile(std::string_view file);
+	void AddRecentNfcFile(std::string_view file);
 
 	bool IsGameListFavorite(uint64 titleId);
 	void SetGameListFavorite(uint64 titleId, bool isFavorite);
@@ -532,7 +517,7 @@ struct CemuConfig
 
 	NetworkService GetAccountNetworkService(uint32 persistentId);
 	void SetAccountSelectedService(uint32 persistentId, NetworkService serviceIndex);
-
+	
 	// emulated usb devices
 	struct
 	{
@@ -559,15 +544,8 @@ struct CemuConfig
 	GameEntry* CreateGameEntry(uint64 titleId);
 };
 
-typedef XMLDataConfig<CemuConfig> XMLCemuConfig_t;
+typedef XMLDataConfig<CemuConfig, &CemuConfig::Load, &CemuConfig::Save> XMLCemuConfig_t;
+extern XMLCemuConfig_t g_config;
+inline CemuConfig& GetConfig() { return g_config.data(); }
 
-inline XMLCemuConfig_t& GetConfigHandle()
-{
-	static XMLCemuConfig_t config;
-	return config;
-}
 
-inline CemuConfig& GetConfig()
-{
-	return GetConfigHandle().data();
-}

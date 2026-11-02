@@ -1,4 +1,3 @@
-#include "WindowSystem.h"
 #include "util/crypto/aes128.h"
 #include "Cafe/OS/RPL/rpl.h"
 #include "Cafe/OS/libs/gx2/GX2.h"
@@ -38,7 +37,7 @@
 #if BOOST_OS_LINUX
 #define _putenv(__s) putenv((char*)(__s))
 #include <sys/sysinfo.h>
-#elif BOOST_OS_MACOS || BOOST_OS_BSD
+#elif BOOST_OS_MACOS
 #define _putenv(__s) putenv((char*)(__s))
 #include <sys/types.h>
 #include <sys/sysctl.h>
@@ -98,12 +97,12 @@ void WindowsInitCwd()
 {
 	#if BOOST_OS_WINDOWS
 	executablePath.resize(4096);
-	int i = GetModuleFileNameW(NULL, executablePath.data(), executablePath.size());
+	int i = GetModuleFileName(NULL, executablePath.data(), executablePath.size());
 	if(i >= 0)
 		executablePath.resize(i);
 	else
 		executablePath.clear();
-	SetCurrentDirectoryW(executablePath.c_str());
+	SetCurrentDirectory(executablePath.c_str());
 	// set high priority
 	SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
 	#endif
@@ -122,7 +121,7 @@ void CemuCommonInit()
 	WindowsInitCwd();
     ExceptionHandler_Init();
 	// read config
-	GetConfigHandle().Load();
+	g_config.Load();
 	if (NetworkConfig::XMLExists())
 		n_config.Load();
 	// parallelize expensive init code
@@ -169,28 +168,18 @@ void UnitTests()
 bool isConsoleConnected = false;
 void requireConsole()
 {
-    #if BOOST_OS_WINDOWS
-    if (isConsoleConnected)
-        return;
+	#if BOOST_OS_WINDOWS
+	if (isConsoleConnected)
+		return;
 
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD dwFileType = GetFileType(hOut);
-
-    if (dwFileType == FILE_TYPE_UNKNOWN || dwFileType == FILE_TYPE_CHAR)
-    {
-        if (AttachConsole(ATTACH_PARENT_PROCESS) != FALSE)
-        {
-            freopen("CONOUT$", "w", stdout);
-            freopen("CONOUT$", "w", stderr);
-            freopen("CONIN$", "r", stdin);
-            isConsoleConnected = true;
-        }
-    }
-    else
-    {
-        isConsoleConnected = true; 
-    }
-    #endif
+	if (AttachConsole(ATTACH_PARENT_PROCESS) != FALSE)
+	{
+		freopen("CONIN$", "r", stdin);
+		freopen("CONOUT$", "w", stdout);
+		freopen("CONOUT$", "w", stderr);
+		isConsoleConnected = true;
+	}
+	#endif
 }
 
 void HandlePostUpdate()
@@ -204,7 +193,7 @@ void HandlePostUpdate()
 		HANDLE lock;
 		do
 		{
-			lock = CreateMutexW(nullptr, TRUE, L"Global\\cemu_update_lock");
+			lock = CreateMutex(nullptr, TRUE, L"Global\\cemu_update_lock");
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		} while (lock == nullptr);
 		const DWORD wait_result = WaitForSingleObject(lock, 2000);
@@ -234,14 +223,14 @@ void gui_create();
 #if BOOST_OS_WINDOWS
 
 // entrypoint for release builds
-int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
+int wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPTSTR lpCmdLine, _In_ int nShowCmd)
 {
 	if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE)))
 		cemuLog_log(LogType::Force, "CoInitializeEx() failed");
 	SDL_SetMainReady();
 	if (!LaunchSettings::HandleCommandline(lpCmdLine))
 		return 0;
-	WindowSystem::Create();
+	gui_create();
 	return 0;
 }
 
@@ -253,27 +242,21 @@ int main(int argc, char* argv[])
 	SDL_SetMainReady();
 	if (!LaunchSettings::HandleCommandline(argc, argv))
 		return 0;
-	WindowSystem::Create();
+	gui_create();
 	return 0;
 }
 
-#elif BOOST_PLAT_ANDROID
+#elif __ANDROID__
 #else
 
-int BreathOfTheWildChildProcessMain();
 int main(int argc, char *argv[])
 {
 #if BOOST_OS_LINUX
-	if (getenv("CEMU_DETECT_RADV") != nullptr)
-		return BreathOfTheWildChildProcessMain();
-#endif
-
-#if BOOST_OS_LINUX || BOOST_OS_BSD
     XInitThreads();
 #endif
     if (!LaunchSettings::HandleCommandline(argc, argv))
 		return 0;
-	WindowSystem::Create();
+	gui_create();
 	return 0;
 }
 #endif

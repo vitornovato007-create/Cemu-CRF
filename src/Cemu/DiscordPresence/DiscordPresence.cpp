@@ -1,51 +1,53 @@
 #include "DiscordPresence.h"
+
+#ifdef ENABLE_DISCORD_RPC
+
+#include <discord_rpc.h>
 #include "Common/version.h"
-#include "DiscordRPCLite.h"
 
 DiscordPresence::DiscordPresence()
 {
-	m_rpcClient = new DiscordRPCLite("460807638964371468");
+	DiscordEventHandlers handlers{};
+	Discord_Initialize("460807638964371468", &handlers, 1, nullptr);
 	UpdatePresence(Idling);
 }
 
 DiscordPresence::~DiscordPresence()
 {
 	ClearPresence();
-	if (m_rpcClient)
-		delete m_rpcClient;
+	Discord_Shutdown();
 }
 
 void DiscordPresence::UpdatePresence(State state, const std::string& text) const
 {
-	if (!m_rpcClient)
-		return;
-	DiscordLiteRichPresence discordPresence{};
-	std::string stateString, detailsString;
+	DiscordRichPresence discord_presence{};
+
+	std::string state_string, details_string;
 	switch (state)
 	{
 	case Idling:
-		detailsString = "Idling";
-		stateString = "";
+		details_string = "Idling";
 		break;
 	case Playing:
-		detailsString = "Ingame";
-		stateString = "Playing " + text;
+		details_string = "Ingame";
+		state_string = "Playing " + text;
 		break;
 	default:
 		assert(false);
 		break;
 	}
-	discordPresence.details = detailsString;
-	discordPresence.state = stateString;
-	discordPresence.startTimestamp = time(nullptr);
-	discordPresence.largeImageText = BUILD_VERSION_WITH_NAME_STRING;
-	discordPresence.largeImageKey = "logo_icon_big_png";
-	m_rpcClient->UpdateRichPresence(discordPresence);
+
+	discord_presence.details = details_string.c_str();
+	discord_presence.state = state_string.c_str();
+	discord_presence.startTimestamp = time(nullptr);
+	discord_presence.largeImageText = BUILD_VERSION_WITH_NAME_STRING;
+	discord_presence.largeImageKey = "logo_icon_big_png";
+	Discord_UpdatePresence(&discord_presence);
 }
 
 void DiscordPresence::ClearPresence() const
 {
-	if (!m_rpcClient)
-		return;
-	m_rpcClient->ClearRichPresence();
+	Discord_ClearPresence();
 }
+
+#endif

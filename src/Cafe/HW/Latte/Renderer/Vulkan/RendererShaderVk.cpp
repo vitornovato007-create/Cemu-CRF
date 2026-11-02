@@ -8,16 +8,10 @@
 
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
+#include <util/helpers/helpers.h>
 
-#include <chrono>
-#include <exception>
-#include "util/helpers/helpers.h"
-
-std::atomic<bool> s_isLoadingShadersVk{ false };
+bool s_isLoadingShadersVk{ false };
 class FileCache* s_spirvCache{nullptr};
-// FileCache is shared by the shader compiler workers. Serialize its operations
-// while allowing GLSL parsing and SPIR-V generation to run in parallel.
-std::mutex s_spirvCacheMutex;
 
 extern std::atomic_int g_compiled_shaders_total;
 extern std::atomic_int g_compiled_shaders_async;
@@ -138,15 +132,8 @@ public:
 	{
 		if (m_threadsActive.exchange(true))
 			return;
-		// Android devices have a tighter CPU/RAM budget. Keep shader compilation
-		// asynchronous, but limit parallel glslang instances to reduce peak memory.
-#if defined(__ANDROID__)
-		// Two workers allow shader compilation to overlap without saturating
-		// the CPU/RAM budget on Android devices.
+		// create thread pool
 		const uint32 threadCount = 2;
-#else
-		const uint32 threadCount = 2;
-#endif
 		for (uint32 i = 0; i < threadCount; ++i)
 			s_threads.emplace_back(&_ShaderVkThreadPool::CompilerThreadFunc, this);
 	}
@@ -186,35 +173,10 @@ public:
 			cemu_assert_debug(job->m_compilationState.getValue() == RendererShaderVk::COMPILATION_STATE::QUEUED);
 			job->m_compilationState.setValue(RendererShaderVk::COMPILATION_STATE::COMPILING);
 			s_compilationQueueMutex.unlock();
-			// Compile jobs must never let an exception escape a std::thread:
-			// an uncaught exception here calls std::terminate and closes the app.
-			const auto compileStart = std::chrono::steady_clock::now();
-			const size_t sourceBytes = job->m_glslCode.size();
-			cemuLog_log(LogType::Force, "[Shader async] begin type={} hash={:016x}_{:016x} sourceBytes={}",
-				(uint32)job->m_type, job->m_baseHash, job->m_auxHash, sourceBytes);
-			try
-			{
-				job->CompileInternal(false);
-				++g_compiled_shaders_async;
-			}
-			catch (const std::exception& e)
-			{
-				cemuLog_log(LogType::Force, "[Shader async] EXCEPTION type={} hash={:016x}_{:016x}: {}",
-					(uint32)job->m_type, job->m_baseHash, job->m_auxHash, e.what());
-				job->FinishCompilation();
-			}
-			catch (...)
-			{
-				cemuLog_log(LogType::Force, "[Shader async] UNKNOWN EXCEPTION type={} hash={:016x}_{:016x}",
-					(uint32)job->m_type, job->m_baseHash, job->m_auxHash);
-				job->FinishCompilation();
-			}
-			const auto compileMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-				std::chrono::steady_clock::now() - compileStart).count();
-			cemuLog_log(LogType::Force, "[Shader async] end type={} hash={:016x}_{:016x} durationMs={} moduleCreated={}",
-				(uint32)job->m_type, job->m_baseHash, job->m_auxHash, compileMs,
-				job->m_shader_module != VK_NULL_HANDLE);
-			// Always release waiters, including when compilation threw an exception.
+			// compile
+			job->CompileInternal(false);
+			++g_compiled_shaders_async;
+			// mark as compiled
 			cemu_assert_debug(job->m_compilationState.getValue() == RendererShaderVk::COMPILATION_STATE::COMPILING);
 			job->m_compilationState.setValue(RendererShaderVk::COMPILATION_STATE::DONE);
 		}
@@ -264,6 +226,22 @@ void RendererShaderVk::Shutdown()
 	ShaderVkThreadPool.StopThreads();
 }
 
+sint32 RendererShaderVk::GetUniformLocation(const char* name)
+{
+	cemu_assert_suspicious();
+	return 0;
+}
+
+void RendererShaderVk::SetUniform2fv(sint32 location, void* data, sint32 count)
+{
+	cemu_assert_suspicious();
+}
+
+void RendererShaderVk::SetUniform4iv(sint32 location, void* data, sint32 count)
+{
+	cemu_assert_suspicious();
+}
+
 void RendererShaderVk::CreateVkShaderModule(std::span<uint32> spirvBuffer)
 {
 	VkShaderModuleCreateInfo createInfo{};
@@ -283,7 +261,7 @@ void RendererShaderVk::CreateVkShaderModule(std::span<uint32> spirvBuffer)
 	}
 
 	// set debug name
-	if (vkr->IsDebugMarkersEnabled())
+	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
 	{
 		VkDebugUtilsObjectNameInfoEXT objName{};
 		objName.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -304,32 +282,19 @@ void RendererShaderVk::FinishCompilation()
 
 void RendererShaderVk::CompileInternal(bool isRenderThread)
 {
-	const bool compileWithDebugInfo = ((VulkanRenderer*)g_renderer.get())->IsTracingToolEnabled();
-
 	// try to retrieve SPIR-V module from cache
-	if (s_isLoadingShadersVk.load(std::memory_order::acquire) && (m_isGameShader && !m_isGfxPackShader) && !compileWithDebugInfo)
+	if (s_isLoadingShadersVk && (m_isGameShader && !m_isGfxPackShader) && s_spirvCache)
 	{
 		cemu_assert_debug(m_baseHash != 0);
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
 		std::vector<uint8> cacheFileData;
-		bool cacheHit = false;
-		{
-			std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
-			if (s_spirvCache)
-				cacheHit = s_spirvCache->GetFile({ h1, h2 }, cacheFileData);
-		}
-		if (cacheHit)
+		if (s_spirvCache->GetFile({ h1, h2 }, cacheFileData))
 		{
 			// generate shader from cached SPIR-V buffer
-			if (cacheFileData.empty() || (cacheFileData.size() % sizeof(uint32)) != 0)
-				cemuLog_log(LogType::Force, "[Shader cache] Invalid SPIR-V cache entry {:016x}_{:016x}; recompiling", m_baseHash, m_auxHash);
-			else
-			{
-				CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
-				FinishCompilation();
-				return;
-			}
+			CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
+			FinishCompilation();
+			return;
 		}
 	}
 
@@ -354,12 +319,21 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	Shader.setStrings(&cstr, 1);
 	Shader.setEnvInput(glslang::EShSourceGlsl, state, glslang::EShClientVulkan, 100);
 	Shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetClientVersion::EShTargetVulkan_1_1);
+
 	Shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_3);
 
-	std::string PreprocessedGLSL;
-	glslang::TShader::ForbidIncluder Includer;
 	TBuiltInResource Resources = GetDefaultBuiltInResource();
-	EShMessages messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
+	std::string PreprocessedGLSL;
+
+	VulkanRenderer* vkr = (VulkanRenderer*)g_renderer.get();
+
+	EShMessages messagesPreprocess;
+	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
+		messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo);
+	else
+		messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
+
+	glslang::TShader::ForbidIncluder Includer;
 	if (!Shader.preprocess(&Resources, 450, ENoProfile, false, false, messagesPreprocess, &PreprocessedGLSL, Includer))
 	{
 		cemuLog_log(LogType::Force, fmt::format("GLSL Preprocessing Failed For {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Shader.getInfoLog()));
@@ -367,16 +341,18 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		return;
 	}
 
+	EShMessages messagesParseLink;
+	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
+		messagesParseLink = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo);
+	else
+		messagesParseLink = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
+
 	const char* PreprocessedCStr = PreprocessedGLSL.c_str();
 	Shader.setStrings(&PreprocessedCStr, 1);
-	EShMessages messagesParseLink = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
 	if (!Shader.parse(&Resources, 100, false, messagesParseLink))
 	{
-		cemuLog_log(LogType::Force, "[Shader GLSL] Parsing failed for {:016x}_{:016x}: {}", m_baseHash, m_auxHash, Shader.getInfoLog());
-		// Log the exact generated source only for failed shaders so the persistent
-		// Android diagnostic capture can identify the conflicting interface declarations.
-		cemuLog_log(LogType::Force, "[Shader GLSL] Failed source {:016x}_{:016x} ({} bytes):\n{}",
-			m_baseHash, m_auxHash, m_glslCode.size(), m_glslCode);
+		cemuLog_log(LogType::Force, fmt::format("GLSL parsing failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Shader.getInfoLog()));
+		cemuLog_logDebug(LogType::Force, "GLSL source:\n{}", m_glslCode);
 		cemu_assert_debug(false);
 		FinishCompilation();
 		return;
@@ -400,23 +376,15 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		return;
 	}
 
-	// temp storage for SPIR-V after translation
+	// temp storage for SPIR-V after translation 
 	std::vector<uint32> spirvBuffer;
 	spv::SpvBuildLogger logger;
 
 	glslang::SpvOptions spvOptions;
 	spvOptions.disableOptimizer = false;
+	spvOptions.generateDebugInfo = (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT);
 	spvOptions.validate = false;
 	spvOptions.optimizeSize = true;
-	if (compileWithDebugInfo)
-	{
-		spvOptions.generateDebugInfo = true;
-		spvOptions.emitNonSemanticShaderDebugInfo = true;
-		spvOptions.emitNonSemanticShaderDebugSource = true;
-
-		Shader.addSourceText(m_glslCode.c_str(), (uint32)m_glslCode.size());
-		Shader.setSourceFile(fmt::format("shader_{:016x}_{:016x}.glsl", m_baseHash, m_auxHash).c_str());
-	}
 
 	//auto beginTime = benchmarkTimer_start();
 
@@ -424,15 +392,12 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 
 	//double timeDur = benchmarkTimer_stop(beginTime);
 	//forceLogRemoveMe_printf("Shader GLSL-to-SPIRV compilation took %lfms Size %08x", timeDur, spirvBuffer.size()*4);
-
-	// store in cache, unless it got compiled with debug info or is a modified shader from a gfx pack
-	if (s_spirvCache && m_isGameShader && m_isGfxPackShader == false && !compileWithDebugInfo)
+	
+	if (s_spirvCache && m_isGameShader && m_isGfxPackShader == false)
 	{
 		uint64 h1, h2;
 		GenerateShaderPrecompiledCacheFilename(m_type, m_baseHash, m_auxHash, h1, h2);
-		std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
-		if (s_spirvCache)
-			s_spirvCache->AddFile({ h1, h2 }, (const uint8*)spirvBuffer.data(), spirvBuffer.size() * sizeof(uint32));
+		s_spirvCache->AddFile({ h1, h2 }, (const uint8*)spirvBuffer.data(), spirvBuffer.size() * sizeof(uint32));
 	}
 
 	CreateVkShaderModule(spirvBuffer);
@@ -485,20 +450,17 @@ bool RendererShaderVk::WaitForCompiled()
 
 void RendererShaderVk::ShaderCacheLoading_begin(uint64 cacheTitleId)
 {
+	if (s_spirvCache)
 	{
-		std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
 		delete s_spirvCache;
 		s_spirvCache = nullptr;
 	}
 	uint32 spirvCacheMagic = GeneratePrecompiledCacheId();
 	const std::string cacheFilename = fmt::format("{:016x}_spirv.bin", cacheTitleId);
 	const fs::path cachePath = ActiveSettings::GetCachePath("shaderCache/precompiled/{}", cacheFilename);
-	{
-		std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
-		s_spirvCache = FileCache::Open(cachePath, true, spirvCacheMagic);
-		if (s_spirvCache == nullptr)
-			cemuLog_log(LogType::Force, "Unable to open SPIR-V cache {}", cacheFilename);
-	}
+	s_spirvCache = FileCache::Open(cachePath, true, spirvCacheMagic);
+	if (s_spirvCache == nullptr)
+		cemuLog_log(LogType::Force, "Unable to open SPIR-V cache {}", cacheFilename);
 	s_isLoadingShadersVk = true;
 }
 
@@ -510,7 +472,6 @@ void RendererShaderVk::ShaderCacheLoading_end()
 
 void RendererShaderVk::ShaderCacheLoading_Close()
 {
-	std::lock_guard<std::mutex> cacheLock(s_spirvCacheMutex);
-	delete s_spirvCache;
-	s_spirvCache = nullptr;
+    delete s_spirvCache;
+    s_spirvCache = nullptr;
 }

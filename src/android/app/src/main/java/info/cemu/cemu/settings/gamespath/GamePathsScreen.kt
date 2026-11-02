@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -22,13 +25,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.R
-import info.cemu.cemu.common.ui.components.ScreenContentLazy
-import info.cemu.cemu.common.ui.localization.tr
+import info.cemu.cemu.guicore.components.ScreenContentLazy
 import kotlinx.coroutines.launch
 
 @Composable
@@ -53,7 +55,7 @@ fun GamePathsScreen(
             if (gamesPaths.contains(gamesPath)) {
                 coroutineScope.launch {
                     snackbarHostState.currentSnackbarData?.dismiss()
-                    snackbarHostState.showSnackbar(tr("Games path already added"))
+                    snackbarHostState.showSnackbar(context.getString(R.string.games_path_already_added))
                 }
                 return@rememberLauncherForActivityResult
             }
@@ -61,13 +63,13 @@ fun GamePathsScreen(
         }
     ScreenContentLazy(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        appBarText = tr("Game paths"),
+        appBarText = stringResource(R.string.game_paths_settings),
         navigateBack = navigateBack,
         actions = {
             IconButton(onClick = { launcher.launch(null) }) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_add),
-                    contentDescription = null
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = stringResource(R.string.add_game_path),
                 )
             }
         },
@@ -107,8 +109,8 @@ fun GamePathsListItem(
                 onClick = onDelete
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_delete),
-                    contentDescription = null
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(R.string.remove_game_path),
                 )
             }
         }

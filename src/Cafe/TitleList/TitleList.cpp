@@ -2,8 +2,11 @@
 #include "Common/FileStream.h"
 
 #include "util/helpers/helpers.h"
-#include "util/helpers/ZArchiveHelpers.h"
 
+#if __ANDROID__
+#include "Common/unix/FilesystemAndroid.h"
+#include "Common/unix/ContentUriStream.h"
+#endif // __ANDROID__
 
 #include <zarchive/zarchivereader.h>
 
@@ -218,8 +221,13 @@ void CafeTitleList::AddTitleFromPath(fs::path path)
 {
 	if (path.has_extension() && boost::iequals(_pathToUtf8(path.extension()), ".wua"))
 	{
-		ZArchiveReader* zar = ZArchiveHelpers::OpenReader(path);
-
+		ZArchiveReader* zar = nullptr;
+#if __ANDROID__
+		if(FilesystemAndroid::isContentUri(path))
+			zar = ZArchiveReader::OpenFromStream(std::make_unique<ContentUriStream>(path));
+		else
+#endif // __ANDROID__
+			zar = ZArchiveReader::OpenFromFile(path);
 		if (!zar)
 		{
 			cemuLog_log(LogType::Force, "Found {} but it is not a valid Wii U archive file", _pathToUtf8(path));
@@ -365,25 +373,25 @@ void CafeTitleList::ScanGamePath(const fs::path& path)
 		else if (boost::iequals(dirName, "meta"))
 			hasMetaFolder = true;
 	};
-#if BOOST_PLAT_ANDROID
-	if (FilesystemAndroid::IsContentUri(path))
+#if __ANDROID__
+	if(FilesystemAndroid::isContentUri(path))
 	{
-		for (auto&& file : FilesystemAndroid::ListFiles(path))
+		for(auto&& file:FilesystemAndroid::listFiles(path))
 		{
-			if (FilesystemAndroid::IsDirectory(file))
+			if(FilesystemAndroid::isFile(file))
+			{
+				filesInDirectory.emplace_back(file);
+			}
+			else if(FilesystemAndroid::isDirectory(file))
 			{
 				dirsInDirectory.emplace_back(file);
 
 				checkForTitleFolders(_pathToUtf8(file.filename()));
 			}
-			else
-			{
-				filesInDirectory.emplace_back(file);
-			}
 		}
 	}
-	else
-#endif // BOOST_PLAT_ANDROID
+	else 
+#endif // __ANDROID__
 	{
 		std::error_code ec;
 		for (auto& it : fs::directory_iterator(path, ec))

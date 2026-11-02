@@ -149,28 +149,14 @@ namespace nn
 			return AOC_RESULT::ERROR_OK;
 		}
 
-		class : public COSModule
+		void Initialize()
 		{
-			public:
-			std::string_view GetName() override
-			{
-				return "nn_aoc";
-			}
+			cafeExportRegister("nn_aoc", AOC_CalculateWorkBufferSize, LogType::NN_AOC);
+			cafeExportRegister("nn_aoc", AOC_ListTitle, LogType::NN_AOC);
 
-			void RPLMapped() override
-			{
-				cafeExportRegister("nn_aoc", AOC_CalculateWorkBufferSize, LogType::NN_AOC);
-				cafeExportRegister("nn_aoc", AOC_ListTitle, LogType::NN_AOC);
-
-				cafeExportRegister("nn_aoc", AOC_OpenTitle, LogType::NN_AOC);
-				cafeExportRegister("nn_aoc", AOC_CloseTitle, LogType::NN_AOC);
-				cafeExportRegister("nn_aoc", AOC_GetPurchaseInfo, LogType::NN_AOC);
-			};
-		}s_COSnnAocModule;
-
-		COSModule* GetModule()
-		{
-			return &s_COSnnAocModule;
+			cafeExportRegister("nn_aoc", AOC_OpenTitle, LogType::NN_AOC);
+			cafeExportRegister("nn_aoc", AOC_CloseTitle, LogType::NN_AOC);
+			cafeExportRegister("nn_aoc", AOC_GetPurchaseInfo, LogType::NN_AOC);
 		}
 	}
 }

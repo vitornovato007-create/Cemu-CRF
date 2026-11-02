@@ -2,12 +2,7 @@ package info.cemu.cemu.nativeinterface
 
 object NativeActiveSettings {
     @JvmStatic
-    external fun initializeActiveSettings(
-        userDataPath: String,
-        configPath: String,
-        dataPath: String,
-        cachePath: String,
-    )
+    external fun initializeActiveSettings(userDataPath: String, dataPath: String, cachePath: String)
 
     @JvmStatic
     external fun setNativeLibDir(nativeLibDir: String)
@@ -20,7 +15,4 @@ object NativeActiveSettings {
 
     @JvmStatic
     external fun getUserDataPath(): String
-
-    @JvmStatic
-    external fun hasRequiredOnlineFiles(): Boolean
 }

@@ -39,8 +39,6 @@ add_library(CemuInput
 
 set_property(TARGET CemuInput PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-cemu_use_precompiled_header(CemuInput)
-
 if(WIN32)
 	# XInput
 	target_sources(CemuInput PRIVATE
@@ -59,7 +57,7 @@ if(WIN32)
 	)
 endif()
 
-if (SUPPORTS_WIIMOTE)
+if (ENABLE_WIIMOTE)
 	target_compile_definitions(CemuInput PUBLIC SUPPORTS_WIIMOTE)
 	target_sources(CemuInput PRIVATE
 			api/Wiimote/WiimoteControllerProvider.h
@@ -68,33 +66,23 @@ if (SUPPORTS_WIIMOTE)
 			api/Wiimote/NativeWiimoteController.h
 			api/Wiimote/NativeWiimoteController.cpp
 			api/Wiimote/WiimoteDevice.h
+			api/Wiimote/hidapi/HidapiWiimote.cpp
+			api/Wiimote/hidapi/HidapiWiimote.h
 	)
-	if (ENABLE_HIDAPI)
+	if (UNIX AND NOT APPLE)
 		target_sources(CemuInput PRIVATE
-				api/Wiimote/hidapi/HidapiWiimote.cpp
-				api/Wiimote/hidapi/HidapiWiimote.h)
-	endif ()
-
-	if (ENABLE_BLUEZ)
-		target_sources(CemuInput PRIVATE
-				api/Wiimote/l2cap/L2CapWiimote.cpp
-				api/Wiimote/l2cap/L2CapWiimote.h)
+			api/Wiimote/l2cap/L2CapWiimote.cpp
+			api/Wiimote/l2cap/L2CapWiimote.h)
 	endif()
 endif ()
 
 
 if(ANDROID)
 	target_sources(CemuInput PRIVATE
-		api/Android/AndroidController.cpp
-		api/Android/AndroidController.h
 		api/Android/AndroidControllerProvider.cpp
 		api/Android/AndroidControllerProvider.h
-		api/Android/ControllerManager.cpp
-		api/Android/ControllerManager.h
-		api/Device/DeviceController.cpp
-		api/Device/DeviceController.h
-		api/Device/DeviceControllerProvider.cpp
-		api/Device/DeviceControllerProvider.h
+		api/Android/AndroidController.cpp
+		api/Android/AndroidController.h
 	)
 endif()
 
@@ -109,10 +97,15 @@ endif()
 target_include_directories(CemuInput PUBLIC "../")
 
 target_link_libraries(CemuInput PRIVATE
+	CemuCafe
 	CemuCommon
-	CemuGui
+	CemuConfig
+	CemuUtil
+	Boost::headers
+	Boost::program_options
+	glm::glm
+	pugixml::pugixml
 )
-
 if (ENABLE_HIDAPI)
 	target_link_libraries(CemuInput PRIVATE hidapi::hidapi)
 endif()
@@ -121,6 +114,7 @@ if(ENABLE_SDL)
 	target_link_libraries(CemuInput PRIVATE	SDL2::SDL2)
 endif()
 
-if (ENABLE_BLUEZ)
+
+if (UNIX AND NOT APPLE AND NOT ANDROID)
 	target_link_libraries(CemuInput PRIVATE bluez::bluez)
 endif ()

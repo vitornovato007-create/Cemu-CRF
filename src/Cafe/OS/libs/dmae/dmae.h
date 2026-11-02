@@ -1,6 +1,1 @@
-#include "Cafe/OS/RPL/COSModule.h"
-
-namespace dmae
-{
-	COSModule* GetModule();
-}
+void dmae_load();

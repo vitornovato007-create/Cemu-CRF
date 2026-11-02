@@ -1,6 +1,7 @@
-#include "Cafe/OS/RPL/COSModule.h"
-
-namespace nn::aoc
+namespace nn
 {
-	COSModule* GetModule();
+	namespace aoc
+	{
+		void Initialize();
+	}
 }

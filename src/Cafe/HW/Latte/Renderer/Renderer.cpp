@@ -1,5 +1,5 @@
 #include "Cafe/HW/Latte/Renderer/Renderer.h"
-#include "WindowSystem.h"
+#include "Cemu/GuiSystem/GuiSystem.h"
 
 #include "config/CemuConfig.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
@@ -9,6 +9,7 @@
 #include <png.h>
 
 #include "config/ActiveSettings.h"
+
 
 std::unique_ptr<Renderer> g_renderer;
 
@@ -64,10 +65,10 @@ void Renderer::Shutdown()
 bool Renderer::ImguiBegin(bool mainWindow)
 {
 	sint32 w = 0, h = 0;
-	if (mainWindow)
-		WindowSystem::GetWindowPhysSize(w, h);
-	else if (WindowSystem::IsPadWindowOpen())
-		WindowSystem::GetPadWindowPhysSize(w, h);
+	if(mainWindow)
+		GuiSystem::getWindowPhysSize(w, h);
+	else if(GuiSystem::isPadWindowOpen())
+		GuiSystem::getPadWindowPhysSize(w, h);
 	else
 		return false;
 		
@@ -77,9 +78,9 @@ bool Renderer::ImguiBegin(bool mainWindow)
 	// select the right context
 	ImGui::SetCurrentContext(mainWindow ? imguiTVContext : imguiPadContext);
 
-	const Vector2f window_size{(float)w, (float)h};
+	const Vector2f window_size{ (float)w,(float)h };
 	auto& io = ImGui::GetIO();
-	io.DisplaySize = {window_size.x, window_size.y}; // should be only updated in the renderer and only when needed
+	io.DisplaySize = { window_size.x, window_size.y }; // should be only updated in the renderer and only when needed
 
 	ImGui_PrecacheFonts();
 	return true;
@@ -109,7 +110,7 @@ uint8 Renderer::RGBComponentToSRGB(uint8 cli)
 	return (uint8)(cs * 255.0f);
 }
 
-void Renderer::RequestScreenshot(ScreenshotSaveFunction onSaveScreenshot)
+void Renderer::RequestScreenshot(const std::function<std::optional<std::string>(const std::vector<uint8>&, int, int, bool)>& onSaveScreenshot)
 {
 	m_screenshot_requested = true;
 	m_on_save_screenshot = onSaveScreenshot;
@@ -118,17 +119,17 @@ void Renderer::RequestScreenshot(ScreenshotSaveFunction onSaveScreenshot)
 void Renderer::CancelScreenshotRequest()
 {
 	m_screenshot_requested = false;
-	m_on_save_screenshot = {};
+	m_on_save_screenshot = nullptr;
 }
 
-
-void Renderer::SaveScreenshot(const std::vector<uint8>& rgb_data, int width, int height, bool mainWindow)
+void Renderer::SaveScreenshot(const std::vector<uint8>& rgb_data, int width, int height, bool mainWindow) const
 {
 	std::thread(
-		[=, screenshotRequested = std::exchange(m_screenshot_requested, false), onSaveScreenshot = std::exchange(m_on_save_screenshot, {})]() {
-			if (screenshotRequested && onSaveScreenshot)
+		[=, this]()
+		{
+			if (m_on_save_screenshot)
 			{
-				auto notificationMessage = onSaveScreenshot(rgb_data, width, height, mainWindow);
+				auto notificationMessage = m_on_save_screenshot(rgb_data, width, height, mainWindow);
 				if (notificationMessage.has_value())
 					LatteOverlay_pushNotification(notificationMessage.value(), 2500);
 			}

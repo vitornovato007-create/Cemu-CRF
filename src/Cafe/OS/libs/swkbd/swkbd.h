@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Cafe/OS/RPL/COSModule.h"
-
 namespace swkbd
 {
 	constexpr uint32 BACKSPACE_KEYCODE = 8;
@@ -22,6 +20,5 @@ namespace swkbd
 	bool hasKeyboardInputHook();
 	void keyInput(uint32 keyCode);
 	void load();
-	COSModule* GetModule();
 
 } // namespace swkbd

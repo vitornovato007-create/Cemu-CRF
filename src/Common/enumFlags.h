@@ -10,65 +10,63 @@ struct EnableBitMaskOperators
 };
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum operator &(TEnum lhs, TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type
+operator &(TEnum lhs, TEnum rhs)
 {
 	return static_cast<TEnum> (static_cast<typename std::underlying_type<TEnum>::type>(lhs) & static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 }
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum operator |(TEnum lhs, TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type
+operator |(TEnum lhs, TEnum rhs)
 {
 	return static_cast<TEnum> (static_cast<typename std::underlying_type<TEnum>::type>(lhs) | static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 }
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum operator ^(TEnum lhs, TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type
+operator ^(TEnum lhs, TEnum rhs)
 {
 	return static_cast<TEnum> (static_cast<typename std::underlying_type<TEnum>::type>(lhs) ^ static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 }
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum operator ~(TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type
+operator ~(TEnum rhs)
 {
 	return static_cast<TEnum> (~static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 }
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum& operator &=(TEnum& lhs, TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type&
+operator &=(TEnum& lhs, TEnum rhs)
 {
 	lhs = static_cast<TEnum> (static_cast<typename std::underlying_type<TEnum>::type>(lhs) & static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 	return lhs;
 }
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum& operator |=(TEnum& lhs, TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type&
+operator |=(TEnum& lhs, TEnum rhs)
 {
 	lhs = static_cast<TEnum> (static_cast<typename std::underlying_type<TEnum>::type>(lhs) | static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 	return lhs;
 }
 
 template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
-TEnum& operator ^=(TEnum& lhs, TEnum rhs)
+typename std::enable_if<EnableBitMaskOperators<TEnum>::enable, TEnum>::type&
+operator ^=(TEnum& lhs, TEnum rhs)
 {
 	lhs = static_cast<TEnum> (static_cast<typename std::underlying_type<TEnum>::type>(lhs) ^ static_cast<typename std::underlying_type<TEnum>::type>(rhs));
 	return lhs;
 }
 
-template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
+template<typename TEnum, typename = std::enable_if_t<EnableBitMaskOperators<TEnum>::enable>>
 constexpr bool operator==(TEnum lhs, std::underlying_type_t<TEnum> rhs)
 {
 	return static_cast<std::underlying_type_t<TEnum>>(lhs) == rhs;
 }
-template<typename TEnum>
-	requires EnableBitMaskOperators<TEnum>::enable
+template<typename TEnum, typename = std::enable_if_t<EnableBitMaskOperators<TEnum>::enable>>
 constexpr bool operator!=(TEnum lhs, std::underlying_type_t<TEnum> rhs)
 {
 	return static_cast<std::underlying_type_t<TEnum>>(lhs) != rhs;
@@ -84,43 +82,43 @@ struct EnableEnumIterators
 };
 
 template<typename TEnum>
-	requires EnableEnumIterators<TEnum>::enable
-TEnum& operator++(TEnum& lhs) 
+typename std::enable_if<EnableEnumIterators<TEnum>::enable, TEnum>::type&
+operator++(TEnum& lhs) 
 {
 	lhs = static_cast<TEnum>(static_cast<typename std::underlying_type<TEnum>::type>(lhs) + 1);
 	return lhs;
 }
 
 template<typename TEnum>
-	requires EnableEnumIterators<TEnum>::enable
-TEnum operator*(TEnum rhs) 
+typename std::enable_if<EnableEnumIterators<TEnum>::enable, TEnum>::type
+operator*(TEnum rhs) 
 {
 	return rhs;
 }
 
 template<typename TEnum>
-	requires EnableEnumIterators<TEnum>::enable
-TEnum begin(TEnum value) 
+typename std::enable_if<EnableEnumIterators<TEnum>::enable, TEnum>::type
+begin(TEnum value) 
 {
 	return EnableEnumIterators<TEnum>::begin;
 }
 
 template<typename TEnum>
-	requires EnableEnumIterators<TEnum>::enable
-TEnum rbegin(TEnum value) 
+typename std::enable_if<EnableEnumIterators<TEnum>::enable, TEnum>::type
+rbegin(TEnum value) 
 {
 	return EnableEnumIterators<TEnum>::rbegin;
 }
 
 template<typename TEnum>
-	requires EnableEnumIterators<TEnum>::enable
-TEnum end(TEnum r) {
+typename std::enable_if<EnableEnumIterators<TEnum>::enable, TEnum>::type
+end(TEnum r) {
 	return EnableEnumIterators<TEnum>::end;
 }
 
 template<typename TEnum>
-	requires EnableEnumIterators<TEnum>::enable
-TEnum rend(TEnum r) {
+typename std::enable_if<EnableEnumIterators<TEnum>::enable, TEnum>::type
+rend(TEnum r) {
 	return EnableEnumIterators<TEnum>::rend;
 }
 

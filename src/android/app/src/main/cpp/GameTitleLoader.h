@@ -21,7 +21,7 @@ struct Game
 class GameTitleLoadedCallback
 {
   public:
-	virtual void OnTitleLoaded(const Game& game, const std::shared_ptr<Image>& icon) = 0;
+	virtual void onTitleLoaded(const Game& game, const std::shared_ptr<Image>& icon) = 0;
 };
 
 class GameTitleLoader
@@ -39,15 +39,15 @@ class GameTitleLoader
 
   public:
 	GameTitleLoader();
-	void QueueTitle(TitleId titleId);
-	void SetOnTitleLoaded(std::shared_ptr<GameTitleLoadedCallback> gameTitleLoadedCallback);
-	void ReloadGameTitles();
+	void queueTitle(TitleId titleId);
+	void setOnTitleLoaded(const std::shared_ptr<GameTitleLoadedCallback>& gameTitleLoadedCallback);
+	void reloadGameTitles();
 	~GameTitleLoader();
-	void TitleRefresh(TitleId titleId);
+	void titleRefresh(TitleId titleId);
 
   private:
-	void LoadGameTitles();
-	std::string GetNameByTitleId(TitleId titleId, const std::optional<TitleInfo>& titleInfo);
-	std::shared_ptr<Image> LoadIcon(TitleId titleId, const std::optional<TitleInfo>& titleInfo);
+	void loadGameTitles();
+	std::string getNameByTitleId(TitleId titleId, const std::optional<TitleInfo>& titleInfo);
+	std::shared_ptr<Image> loadIcon(TitleId titleId, const std::optional<TitleInfo>& titleInfo);
 	void HandleTitleListCallback(CafeTitleListCallbackEvent* evt);
 };

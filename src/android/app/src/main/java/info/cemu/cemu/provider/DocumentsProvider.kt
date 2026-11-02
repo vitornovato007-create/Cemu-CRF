@@ -12,8 +12,8 @@ import android.provider.DocumentsContract
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import info.cemu.cemu.BuildConfig
+import info.cemu.cemu.CemuApplication
 import info.cemu.cemu.R
-import info.cemu.cemu.common.android.context.internalFolder
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -22,14 +22,22 @@ import java.io.IOException
 import java.util.Objects
 
 class DocumentsProvider : DocumentsProvider() {
-    private val baseDirectory: File by lazy {
-        requireContext().internalFolder()
-    }
+    private var _baseDirectory: File? = null
+    private val baseDirectory: File
+        get() {
+            if (_baseDirectory == null) {
+                try {
+                    _baseDirectory = CemuApplication.Application.internalFolder.canonicalFile
+                } catch (e: IOException) {
+                    throw RuntimeException(e)
+                }
+            }
+            return _baseDirectory!!
+        }
 
-    private val applicationName: String by lazy {
-        var context = requireContext().applicationContext
-        context.applicationInfo.loadLabel(context.packageManager).toString()
-    }
+    private val applicationName =
+        CemuApplication.Application.applicationInfo.loadLabel(CemuApplication.Application.packageManager)
+            .toString()
 
     override fun onCreate(): Boolean {
         return true
@@ -69,7 +77,7 @@ class DocumentsProvider : DocumentsProvider() {
     override fun createDocument(
         parentDocumentId: String,
         mimeType: String,
-        displayName: String,
+        displayName: String
     ): String {
         val parentFile = getFile(parentDocumentId)
         val newFile = resolveWithoutConflict(parentFile, displayName)
@@ -191,15 +199,15 @@ class DocumentsProvider : DocumentsProvider() {
     override fun moveDocument(
         sourceDocumentId: String,
         sourceParentDocumentId: String,
-        targetParentDocumentId: String,
+        targetParentDocumentId: String
     ): String {
         try {
             val newDocumentId =
                 copyDocument(sourceDocumentId, sourceParentDocumentId, targetParentDocumentId)
             removeDocument(sourceDocumentId, sourceParentDocumentId)
             return newDocumentId
-        } catch (notFoundException: FileNotFoundException) {
-            throw FileNotFoundException("Couldn't move document '$sourceDocumentId' ${notFoundException.message}")
+        } catch (e: FileNotFoundException) {
+            throw FileNotFoundException("Couldn't move document '$sourceDocumentId'")
         }
     }
 
@@ -207,7 +215,7 @@ class DocumentsProvider : DocumentsProvider() {
     override fun queryChildDocuments(
         parentDocumentId: String,
         projection: Array<String>?,
-        sortOrder: String?,
+        sortOrder: String?
     ): Cursor {
         val cursor = MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION)
         val parent = getFile(parentDocumentId)
@@ -222,7 +230,7 @@ class DocumentsProvider : DocumentsProvider() {
     override fun openDocument(
         documentId: String,
         mode: String,
-        signal: CancellationSignal?,
+        signal: CancellationSignal?
     ): ParcelFileDescriptor {
         val file = getFile(documentId)
         val accessMode = ParcelFileDescriptor.parseMode(mode)
@@ -237,7 +245,7 @@ class DocumentsProvider : DocumentsProvider() {
     private fun copyDocument(
         sourceDocumentId: String,
         sourceParentDocumentId: String,
-        targetParentDocumentId: String,
+        targetParentDocumentId: String
     ): String {
         if (!isChildDocument(sourceParentDocumentId, sourceDocumentId)) {
             throw FileNotFoundException("Couldn't copy document '$sourceDocumentId' as its parent is not '$sourceParentDocumentId'")
@@ -252,7 +260,7 @@ class DocumentsProvider : DocumentsProvider() {
         }
 
         // Makes sure two files don't have the same name by adding a number to the end
-        var noConflictId = 1
+        val noConflictId = 1
         val periodIndex = name.lastIndexOf('.')
         var extension = ""
         var baseName = name
@@ -262,7 +270,6 @@ class DocumentsProvider : DocumentsProvider() {
         }
         while (file.exists()) {
             val newFileName = "$baseName ($noConflictId)$extension"
-            noConflictId++
             file = file.toPath().resolve(newFileName).toFile()
         }
         return file
@@ -324,7 +331,7 @@ class DocumentsProvider : DocumentsProvider() {
         if (documentId!!.startsWith(ROOT_ID)) {
             val file = resolve(baseDirectory, documentId.substring(ROOT_ID.length + 1))
             if (!file.exists()) {
-                throw FileNotFoundException("${file.absolutePath} $documentId not found")
+                throw FileNotFoundException(file.absolutePath + " " + documentId + " not found")
             }
             return file
         } else {
@@ -338,7 +345,7 @@ class DocumentsProvider : DocumentsProvider() {
 
     companion object {
         const val ROOT_ID: String = "root"
-        const val AUTHORITY: String = "${BuildConfig.APPLICATION_ID}.provider"
+        const val AUTHORITY: String = BuildConfig.APPLICATION_ID + ".provider"
         private val DEFAULT_ROOT_PROJECTION = arrayOf(
             DocumentsContract.Root.COLUMN_ROOT_ID,
             DocumentsContract.Root.COLUMN_MIME_TYPES,

@@ -5,16 +5,20 @@
 #include "Cafe/OS/libs/nn_act/nn_act.h"
 #include "Cafe/CafeSystem.h"
 #include "Cemu/napi/napi.h"
-#include "Cafe/OS/RPL/COSModule.h"
 
 #include "nn_olv_Common.h"
 
-namespace nn::olv
+namespace nn
 {
-	extern ParamPackStorage g_ParamPack;
-	extern DiscoveryResultStorage g_DiscoveryResults;
+	namespace olv
+	{
 
-	sint32 GetOlvAccessKey(uint32* pOutKey);
+		extern ParamPackStorage g_ParamPack;
+		extern DiscoveryResultStorage g_DiscoveryResults;
 
-	COSModule* GetModule();
+		sint32 GetOlvAccessKey(uint32_t* pOutKey);
+
+		void load();
+		void unload();
+	}
 }

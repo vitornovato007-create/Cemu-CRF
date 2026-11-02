@@ -16,7 +16,7 @@ namespace LatteDecompiler
 			}
 		}
 
-		uint32 uniformCurrentOffset = 0;
+		sint32 uniformCurrentOffset = 0;
 		auto shader = decompilerContext->shader;
 		auto shaderType = decompilerContext->shader->shaderType;
 		auto shaderSrc = decompilerContext->shaderSource;
@@ -287,9 +287,10 @@ namespace LatteDecompiler
 		if (decompilerContext->options->spirvInstrinsics.hasRoundingModeRTEFloat32)
 		{
 			src->add("#extension GL_EXT_spirv_intrinsics: enable" _CRLF);
-			src->add("spirv_execution_mode(capabilities = [4467], extensions = [\"SPV_KHR_float_controls\"], 4462, 16);" _CRLF);
-			src->add("spirv_execution_mode(capabilities = [4467], extensions = [\"SPV_KHR_float_controls\"], 4462, 32);" _CRLF);
-			src->add("spirv_execution_mode(capabilities = [4467], extensions = [\"SPV_KHR_float_controls\"], 4462, 64);" _CRLF);
+			// set RoundingModeRTE
+			src->add("spirv_execution_mode(4462, 16);" _CRLF);
+			src->add("spirv_execution_mode(4462, 32);" _CRLF);
+			src->add("spirv_execution_mode(4462, 64);" _CRLF);
 		}
 		src->add("#else" _CRLF);
 		// OpenGL defines
@@ -380,14 +381,6 @@ namespace LatteDecompiler
 			if (psInputIndex == -1)
 				continue; // no ps input
 
-			// A malformed/duplicated semantic mapping must not emit two interface
-			// variables at the same Vulkan location.
-			if (activePassParams.at(psInputIndex))
-			{
-				cemuLog_log(LogType::Force, "[GLSL] Duplicate vertex output semantic {} maps to location {}; declaration skipped",
-					vsSemanticId, psInputIndex);
-				continue;
-			}
 			activePassParams.at(psInputIndex) = true;
 
 			src->addFmt("layout(location = {}) ", psInputIndex);
@@ -399,26 +392,20 @@ namespace LatteDecompiler
 			src->addFmt(" vec4 passParameterSem{};" _CRLF, psInputTable->import[psInputIndex].semanticId);
 		}
 
-		// Dummy varyings are a legacy workaround for stage-interface matching.
-		// They conflict with transform-feedback outputs that also require locations.
-		const bool nativeTransformFeedback = shaderContext->analyzer.hasStreamoutEnable &&
-			!shaderContext->options->useTFViaSSBO;
-		if (!nativeTransformFeedback)
+		// TODO: fix this
+		for (uint32 i = 0; i < 32; i++)
 		{
-			for (uint32 i = 0; i < 32; i++)
-			{
-				if (!activePassParams[i])
-					src->addFmt("layout(location = {0}) out vec4 dummyPassParameterSem{0};" _CRLF, i);
-			}
-
-			src->add("void dummyPassParamInit() {" _CRLF);
-			for (uint32 i = 0; i < 32; i++)
-			{
-				if (!activePassParams[i])
-					src->addFmt("dummyPassParameterSem{} = vec4(0.0, 0.0, 0.0, 0.0);" _CRLF, i);
-			}
-			src->add("}" _CRLF);
+			if (!activePassParams[i])
+				src->addFmt("layout(location = {0}) out vec4 dummyPassParameterSem{0};" _CRLF, i);
 		}
+
+		src->add("void dummyPassParamInit() {" _CRLF);
+		for (uint32 i = 0; i < 32; i++)
+		{
+			if (!activePassParams[i])
+				src->addFmt("dummyPassParameterSem{} = vec4(0.0, 0.0, 0.0, 0.0);" _CRLF, i);
+		}
+		src->add("}" _CRLF);
 	}
 
 	void _emitPSImports(LatteDecompilerShaderContext* shaderContext)
@@ -496,7 +483,6 @@ namespace LatteDecompiler
 			if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry)
 			{
 				// parameters shared between geometry and pixel shader
-				std::array<bool, 128> emittedG2PLocations{};
 				uint32 ringItemSize = decompilerContext->contextRegisters[mmSQ_GSVS_RING_ITEMSIZE] & 0x7FFF;
 				if ((ringItemSize & 0xF) != 0)
 					debugBreakpoint();
@@ -507,32 +493,18 @@ namespace LatteDecompiler
 				{
 					if (decompilerContext->parsedGSCopyShader->paramMapping[p].exportType != 2)
 						continue;
-					const uint32 location = decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F;
-					if (emittedG2PLocations[location])
-					{
-						cemuLog_log(LogType::Force, "[GLSL] Duplicate geometry output location {}; declaration skipped", location);
-						continue;
-					}
-					emittedG2PLocations[location] = true;
-					src->addFmt("layout(location = {}) out vec4 passG2PParameter{};" _CRLF, location, (sint32)decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam);
+					src->addFmt("layout(location = {}) out vec4 passG2PParameter{};" _CRLF, decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F, (sint32)decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam);
 				}
 			}
 			else if (decompilerContext->shaderType == LatteConst::ShaderType::Pixel)
 			{
 				// pixel shader with geometry shader
 				LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
-				std::array<bool, 128> emittedG2PInputLocations{};
 				for (sint32 i = 0; i < psInputTable->count; i++)
 				{
 					if (psInputTable->import[i].semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
 						continue;
 					uint32 location = psInputTable->import[i].semanticId & 0x7F; // todo - the range above 128 has special meaning?
-					if (emittedG2PInputLocations[location])
-					{
-						cemuLog_log(LogType::Force, "[GLSL] Duplicate pixel input location {}; declaration skipped", location);
-						continue;
-					}
-					emittedG2PInputLocations[location] = true;
 
 					src->addFmt("layout(location = {}) ", location);
 					if (psInputTable->import[i].isFlat)
@@ -577,39 +549,7 @@ namespace LatteDecompiler
 			}
 			else
 			{
-				sint32 locationOffset = 0; // glslang requires distinct locations for transform-feedback outputs
-				if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex &&
-					!decompilerContext->options->usesGeometryShader)
-				{
-					LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
-					const auto parameterMask = decompilerContext->shader->outputParameterMask;
-					for (uint32 outputIndex = 0; outputIndex < 32; outputIndex++)
-					{
-						if ((parameterMask & (1u << outputIndex)) == 0)
-							continue;
-						const uint32 semanticId = _getVertexShaderOutParamSemanticId(decompilerContext->contextRegisters, outputIndex);
-						if (semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
-							continue;
-						for (sint32 inputIndex = 0; inputIndex < psInputTable->count; inputIndex++)
-						{
-							if (psInputTable->import[inputIndex].semanticId == semanticId)
-							{
-								locationOffset = std::max(locationOffset, inputIndex + 1);
-								break;
-							}
-						}
-					}
-				}
-				else if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry &&
-					decompilerContext->parsedGSCopyShader)
-				{
-					for (sint32 p = 0; p < decompilerContext->parsedGSCopyShader->numParam; p++)
-					{
-						if (decompilerContext->parsedGSCopyShader->paramMapping[p].exportType == 2)
-							locationOffset = std::max(locationOffset,
-								static_cast<sint32>((decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F) + 1));
-					}
-				}
+				sint32 locationOffset = 0; // glslang wants a location for xfb outputs
 				for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
 				{
 					if (!decompilerContext->output->streamoutBufferWriteMask[i])

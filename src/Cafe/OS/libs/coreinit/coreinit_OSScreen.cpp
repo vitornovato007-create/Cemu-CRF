@@ -5,6 +5,9 @@
 #include "Cafe/OS/libs/coreinit/coreinit_OSScreen_font.h"
 #include "Cafe/OS/libs/coreinit/coreinit_OSScreen.h"
 
+#define OSSCREEN_TV		(0)
+#define OSSCREEN_DRC	(1)
+
 namespace coreinit
 {
 
@@ -36,16 +39,19 @@ namespace coreinit
 		}
 	}
 
-	void OSScreenInit()
+	void coreinitExport_OSScreenInit(PPCInterpreter_t* hCPU)
 	{
 		// todo - init VI registers?
+
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
-	uint32 OSScreenGetBufferSizeEx(uint32 screenIndex)
+	void coreinitExport_OSScreenGetBufferSizeEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
 		cemu_assert(screenIndex < 2);
 		uint32 bufferSize = screenSizes[screenIndex].pitch * screenSizes[screenIndex].y * 4 * 2;
-		return bufferSize;
+		osLib_returnFromFunction(hCPU, bufferSize);
 	}
 
 	void _updateCurrentDrawScreen(sint32 screenIndex)
@@ -58,40 +64,60 @@ namespace coreinit
 			currentScreenBasePtr[screenIndex] = memory_getPointerFromPhysicalOffset(LatteGPUState.osScreen.screen[screenIndex].physPtr);
 	}
 
-	void OSScreenSetBufferEx(uint32 screenIndex, uint32 buffer)
+	void coreinitExport_OSScreenSetBufferEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
+		ppcDefineParamU32(buffer, 1);
 		cemu_assert(screenIndex < 2);
 		LatteGPUState.osScreen.screen[screenIndex].physPtr = buffer;
 		_updateCurrentDrawScreen(screenIndex);
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
-	void OSScreenEnableEx(uint32 screenIndex, uint32 isEnabled)
+	void coreinitExport_OSScreenEnableEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
+		ppcDefineParamU32(isEnabled, 1);
 		cemu_assert(screenIndex < 2);
 		LatteGPUState.osScreen.screen[screenIndex].isEnabled = isEnabled != 0;
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
-	void OSScreenClearBufferEx(uint32 screenIndex, uint32 color)
+	void coreinitExport_OSScreenClearBufferEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
+		ppcDefineParamU32(color, 1);
 		cemu_assert(screenIndex < 2);
 		_OSScreen_Clear(screenIndex, color);
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
-	void OSScreenFlipBuffersEx(uint32 screenIndex)
+	void coreinitExport_OSScreenFlipBuffersEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
 		cemu_assert(screenIndex < 2);
+		cemuLog_logDebug(LogType::Force, "OSScreenFlipBuffersEx {}", screenIndex);
 		LatteGPUState.osScreen.screen[screenIndex].flipRequestCount++;
 		_updateCurrentDrawScreen(screenIndex);
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
-	void OSScreenPutPixelEx(uint32 screenIndex, sint32 x, sint32 y, uint32 color)
+	void coreinitExport_OSScreenPutPixelEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
+		ppcDefineParamS32(x, 1);
+		ppcDefineParamS32(y, 2);
+		ppcDefineParamU32(color, 3);
 		if (screenIndex >= 2)
+		{
+			osLib_returnFromFunction(hCPU, 0);
 			return;
+		}
 		if (x >= 0 && x < screenSizes[screenIndex].x && y >= 0 && y < screenSizes[screenIndex].y)
 		{
 			*(uint32*)((uint8*)currentScreenBasePtr[screenIndex] + (x + y * screenSizes[screenIndex].pitch) * 4) = _swapEndianS32(color);
 		}
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
 	const char* osScreenCharset = "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
@@ -110,8 +136,13 @@ namespace coreinit
 		return -1;
 	}
 
-	void OSScreenPutFontEx(uint32 screenIndex, sint32 x, sint32 y, const char* str)
+	void coreinitExport_OSScreenPutFontEx(PPCInterpreter_t* hCPU)
 	{
+		ppcDefineParamU32(screenIndex, 0);
+		ppcDefineParamS32(x, 1);
+		ppcDefineParamS32(y, 2);
+		ppcDefineParamStr(str, 3);
+
 		// characters are:
 		// 16 x 32 (including the margin)
 		// with a margin of 4 x 8
@@ -119,23 +150,16 @@ namespace coreinit
 		if (y < 0)
 		{
 			debug_printf("OSScreenPutFontEx: y has invalid value\n");
+			osLib_returnFromFunction(hCPU, 0);
 			return;
 		}
 
 		sint32 px = x * 16;
 		sint32 py = y * 24;
-		sint32 initialPx = px;
 
 		while (*str)
 		{
 			sint32 charIndex = _getOSScreenFontCharIndex(*str);
-			if (*str == (uint8)'\n')
-			{
-				px = initialPx;
-				py += 24;
-				str++;
-				continue;
-			}
 			if (charIndex >= 0)
 			{
 				const uint8* charBitmap = osscreenBitmapFont + charIndex * 50;
@@ -152,17 +176,18 @@ namespace coreinit
 			px += 16;
 			str++;
 		}
+		osLib_returnFromFunction(hCPU, 0);
 	}
 
 	void InitializeOSScreen()
 	{
-		cafeExportRegister("coreinit", OSScreenInit, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenGetBufferSizeEx, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenSetBufferEx, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenEnableEx, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenClearBufferEx, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenFlipBuffersEx, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenPutPixelEx, LogType::Placeholder);
-		cafeExportRegister("coreinit", OSScreenPutFontEx, LogType::Placeholder);
+		osLib_addFunction("coreinit", "OSScreenInit", coreinitExport_OSScreenInit);
+		osLib_addFunction("coreinit", "OSScreenGetBufferSizeEx", coreinitExport_OSScreenGetBufferSizeEx);
+		osLib_addFunction("coreinit", "OSScreenSetBufferEx", coreinitExport_OSScreenSetBufferEx);
+		osLib_addFunction("coreinit", "OSScreenEnableEx", coreinitExport_OSScreenEnableEx);
+		osLib_addFunction("coreinit", "OSScreenClearBufferEx", coreinitExport_OSScreenClearBufferEx);
+		osLib_addFunction("coreinit", "OSScreenFlipBuffersEx", coreinitExport_OSScreenFlipBuffersEx);
+		osLib_addFunction("coreinit", "OSScreenPutPixelEx", coreinitExport_OSScreenPutPixelEx);
+		osLib_addFunction("coreinit", "OSScreenPutFontEx", coreinitExport_OSScreenPutFontEx);
 	}
 }

@@ -46,9 +46,8 @@ InputManager::InputManager()
 #if HAS_WIIMOTE
 	create_provider<WiimoteControllerProvider>();
 #endif
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 	create_provider<AndroidControllerProvider>();
-	create_provider<DeviceControllerProvider>();
 #endif
 
 	m_update_thread_shutdown.store(false);
@@ -967,4 +966,10 @@ void InputManager::update_thread()
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		std::this_thread::yield();
 	}
+}
+
+MotionSample InputManager::get_device_motion_sample() const
+{
+	std::shared_lock lock(m_device_motion.m_mutex);
+	return m_device_motion.m_motion_sample;
 }

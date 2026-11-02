@@ -349,7 +349,7 @@ namespace coreinit
 		}
 	}
 
-	void MapAlarmExports()
+	void InitializeAlarm()
 	{
 		cafeExportRegister("coreinit", OSCreateAlarm, LogType::CoreinitAlarm);
 		cafeExportRegister("coreinit", OSCreateAlarmEx, LogType::CoreinitAlarm);
@@ -358,10 +358,7 @@ namespace coreinit
 		cafeExportRegister("coreinit", OSSetPeriodicAlarm, LogType::CoreinitAlarm);
 		cafeExportRegister("coreinit", OSSetAlarmUserData, LogType::CoreinitAlarm);
 		cafeExportRegister("coreinit", OSGetAlarmUserData, LogType::CoreinitAlarm);
-	}
 
-	void InitializeAlarm()
-	{
 		// init event
 		OSInitEvent(g_alarmEvent.GetPtr(), OSEvent::EVENT_STATE::STATE_NOT_SIGNALED, OSEvent::EVENT_MODE::MODE_AUTO);
 

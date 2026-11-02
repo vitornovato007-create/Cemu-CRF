@@ -10,7 +10,6 @@ public:
 
 	virtual ~RendererShaderGL();
 
-	void CleanupShaderObj();
 	void PreponeCompilation(bool isRenderThread) override;
 	bool IsCompiled() override;
 	bool WaitForCompiled() override;
@@ -18,12 +17,9 @@ public:
 	GLuint GetProgram() const { cemu_assert_debug(m_isCompiled); return m_program; }
 	GLuint GetShaderObject() const { cemu_assert_debug(m_isCompiled); return m_shader_object; }
 
-	sint32 GetUniformLocation(const char* name);
-
-	void SetUniform1i(sint32 location, sint32 value);
-	void SetUniform1f(sint32 location, float value);
-	void SetUniform2fv(sint32 location, void* data, sint32 count);
-	void SetUniform4iv(sint32 location, void* data, sint32 count);
+	sint32 GetUniformLocation(const char* name) override;
+	void SetUniform2fv(sint32 location, void* data, sint32 count) override;
+	void SetUniform4iv(sint32 location, void* data, sint32 count) override;
 
 	static void ShaderCacheLoading_begin(uint64 cacheTitleId);
 	static void ShaderCacheLoading_end();

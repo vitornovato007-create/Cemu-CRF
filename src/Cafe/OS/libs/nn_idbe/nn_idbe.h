@@ -1,6 +1,8 @@
-#include "Cafe/OS/RPL/COSModule.h"
 
-namespace nn::idbe
+namespace nn
 {
-	COSModule* GetModule();
+	namespace idbe
+	{
+		void load();
+	}
 }

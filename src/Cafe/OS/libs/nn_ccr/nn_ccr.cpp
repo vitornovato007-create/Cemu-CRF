@@ -9,23 +9,8 @@ namespace nn::ccr
 		return -1;
 	}
 
-	class : public COSModule
+	void Initialize()
 	{
-		public:
-		std::string_view GetName() override
-		{
-			return "nn_ccr";
-		}
-
-		void RPLMapped() override
-		{
-			cafeExportRegister("nn_ccr", CCRSysCaffeineBootCheck, LogType::Placeholder);
-		};
-
-	}s_COSnnccrModule;
-
-	COSModule* GetModule()
-	{
-		return &s_COSnnccrModule;
+		cafeExportRegister("nn_ccr", CCRSysCaffeineBootCheck, LogType::Placeholder);
 	}
 }

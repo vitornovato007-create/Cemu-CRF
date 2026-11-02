@@ -21,9 +21,8 @@
 #include "input/api/Wiimote/NativeWiimoteController.h"
 #endif
 
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 #include "input/api/Android/AndroidController.h"
-#include "input/api/Device/DeviceController.h"
 #endif
 
 ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::string_view uuid,
@@ -109,11 +108,9 @@ ControllerPtr ControllerFactory::CreateController(InputAPI::Type api, std::strin
 			return std::make_shared<NativeWiimoteController>(index);
 		}
 #endif
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 	case InputAPI::Android:
 		return std::make_shared<AndroidController>(uuid, display_name);
-	case InputAPI::Device:
-		return std::make_shared<DeviceController>();
 #endif
 	default:
 		throw std::invalid_argument(fmt::format("unhandled controller api: {}", api));
@@ -186,11 +183,9 @@ ControllerProviderPtr ControllerFactory::CreateControllerProvider(InputAPI::Type
 	case InputAPI::Wiimote:
 		return std::make_shared<WiimoteControllerProvider>();
 #endif
-#if BOOST_PLAT_ANDROID
+#if __ANDROID
 	case InputAPI::Android:
 		return std::make_shared<AndroidControllerProvider>();
-	case InputAPI::Device:
-		return std::make_shared<DeviceControllerProvider>();
 #endif
 	default:
 		cemu_assert_debug(false);

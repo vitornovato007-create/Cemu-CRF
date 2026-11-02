@@ -1,8 +1,7 @@
 #pragma once
 
-#undef GetHwnd
 #include <dxgi1_4.h>
-#include <wrl/client.h>
+//#include <atlbase.h>
 
 class DXGIWrapper
 {
@@ -24,27 +23,33 @@ public:
 			throw std::runtime_error("can't find CreateDXGIFactory1 in dxgi module");
 		}
 
-		Microsoft::WRL::ComPtr<IDXGIFactory1> dxgiFactory;
+		IDXGIFactory1* dxgiFactory = nullptr;
 		pCreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory));
 
-		Microsoft::WRL::ComPtr<IDXGIAdapter1> dxgiAdapter;
+		IDXGIAdapter1* tmpDxgiAdapter = nullptr;
 		UINT adapterIndex = 0;
-		while (dxgiFactory->EnumAdapters1(adapterIndex, &dxgiAdapter) != DXGI_ERROR_NOT_FOUND)
+		while (dxgiFactory->EnumAdapters1(adapterIndex, &tmpDxgiAdapter) != DXGI_ERROR_NOT_FOUND)
 		{
 			DXGI_ADAPTER_DESC1 desc;
-			dxgiAdapter->GetDesc1(&desc);
+			tmpDxgiAdapter->GetDesc1(&desc);
 
 			if (deviceLUID == nullptr || memcmp(&desc.AdapterLuid, deviceLUID, sizeof(LUID)) == 0)
 			{
-				if (FAILED(dxgiAdapter.As(&m_dxgiAdapter)))
-				{
-					Cleanup();
-					throw std::runtime_error("can't create dxgi adapter");
-				}
+				tmpDxgiAdapter->QueryInterface(IID_PPV_ARGS(&m_dxgiAdapter));
+				tmpDxgiAdapter->Release();
 				break;
 			}
 
+			tmpDxgiAdapter->Release();
 			++adapterIndex;
+		}
+
+		dxgiFactory->Release();
+
+		if (!m_dxgiAdapter)
+		{
+			Cleanup();
+			throw std::runtime_error("can't create dxgi adapter");
 		}
 	}
 
@@ -60,11 +65,15 @@ public:
 
 private:
 	HMODULE m_moduleHandle = nullptr;
-	Microsoft::WRL::ComPtr<IDXGIAdapter3> m_dxgiAdapter;
+	IDXGIAdapter3* m_dxgiAdapter = nullptr;
 
 	void Cleanup()
 	{
-		m_dxgiAdapter.Reset();
+		if (m_dxgiAdapter)
+		{
+			m_dxgiAdapter->Release();
+			m_dxgiAdapter = nullptr;
+		}
 
 		if (m_moduleHandle)
 		{

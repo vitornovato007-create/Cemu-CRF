@@ -15,22 +15,24 @@ import info.cemu.cemu.nativeinterface.NativeEmulation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.dropUnlessResumed
-import info.cemu.cemu.common.ui.components.Button
-import info.cemu.cemu.common.ui.components.ScreenContent
-import info.cemu.cemu.common.ui.localization.tr
+import info.cemu.cemu.R
+import info.cemu.cemu.guicore.components.Button
+import info.cemu.cemu.guicore.components.ScreenContent
+
+data class SettingsHomeScreenActions(
+    val goToGeneralSettings: () -> Unit,
+    val goToInputSettings: () -> Unit,
+    val goToGraphicsSettings: () -> Unit,
+    val goToAudioSettings: () -> Unit,
+    val goToOverlaySettings: () -> Unit,
+)
 
 @Composable
-fun SettingsHomeScreen(
-    goToGeneralSettings: () -> Unit,
-    goToInputSettings: () -> Unit,
-    goToGraphicsSettings: () -> Unit,
-    goToEmulatedUSBDevicesSettings: () -> Unit,
-    goToAudioSettings: () -> Unit,
-    goToAccountSettings: () -> Unit,
-    goToOverlaySettings: () -> Unit,
-    navigateBack: () -> Unit
-) {
+
+fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActions) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var validationEnabled by remember { mutableStateOf(NativeEmulation.isVulkanValidationEnabled()) }
@@ -53,48 +55,35 @@ fun SettingsHomeScreen(
                     }
                 } catch (exception: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            context,
-                            "Failed to export Vulkan log: ${exception.message ?: "unknown error"}",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(context, "Failed to export Vulkan log: ${exception.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
         }
     }
-
     ScreenContent(
-        appBarText = tr("Settings"),
+        appBarText = stringResource(R.string.settings),
         navigateBack = navigateBack,
     ) {
         Button(
-            label = tr("General settings"),
-            onClick = dropUnlessResumed(block = goToGeneralSettings)
+            label = stringResource(R.string.general_settings),
+            onClick = dropUnlessResumed(block = actions.goToGeneralSettings)
         )
         Button(
-            label = tr("Input settings"),
-            onClick = dropUnlessResumed(block = goToInputSettings)
+            label = stringResource(R.string.input_settings),
+            onClick = dropUnlessResumed(block = actions.goToInputSettings)
         )
         Button(
-            label = tr("Graphics settings"),
-            onClick = dropUnlessResumed(block = goToGraphicsSettings)
+            label = stringResource(R.string.graphics_settings),
+            onClick = dropUnlessResumed(block = actions.goToGraphicsSettings)
         )
         Button(
-            label = tr("Audio settings"),
-            onClick = dropUnlessResumed(block = goToAudioSettings)
+            label = stringResource(R.string.audio_settings),
+            onClick = dropUnlessResumed(block = actions.goToAudioSettings)
         )
         Button(
-            label = tr("Overlay settings"),
-            onClick = dropUnlessResumed(block = goToOverlaySettings)
-        )
-        Button(
-            label = tr("Emulated USB Devices"),
-            onClick = dropUnlessResumed(block = goToEmulatedUSBDevicesSettings)
-        )
-        Button(
-            label = tr("Account settings"),
-            onClick = dropUnlessResumed(block = goToAccountSettings)
+            label = stringResource(R.string.overlay_settings),
+            onClick = dropUnlessResumed(block = actions.goToOverlaySettings)
         )
         Button(
             label = if (validationEnabled) "Vulkan validation: ON (slower)" else "Enable Vulkan validation (slower)",

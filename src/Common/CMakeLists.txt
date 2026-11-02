@@ -6,6 +6,7 @@ add_library(CemuCommon
   ExceptionHandler/ExceptionHandler.cpp
   ExceptionHandler/ExceptionHandler.h
   FileStream.h
+  FileStream.cpp
   GLInclude/glext.h
   GLInclude/glFunctions.h
   GLInclude/GLInclude.h
@@ -46,7 +47,7 @@ PRIVATE
 )
 endif()
 
-if(LINUX)
+if(UNIX AND NOT APPLE)
 	target_sources(CemuCommon PRIVATE
 		ExceptionHandler/ELFSymbolTable.cpp
 		ExceptionHandler/ELFSymbolTable.h
@@ -55,21 +56,25 @@ endif()
 
 if(ANDROID)
   target_sources(CemuCommon PRIVATE
-    android/FileStream_android.cpp
-    android/FileStream_android.h
-    android/FdStream.h
-    android/FileStream_saf.cpp
-    android/FileStream_saf.h
-    android/FilesystemAndroid.cpp
-    android/FilesystemAndroid.h
+    unix/ContentUriStream.h
+    unix/FilesystemAndroid.cpp
+    unix/FilesystemAndroid.h
+    unix/FileStream_contentUri.cpp
+    unix/FileStream_contentUri.h
   )
 endif()
 
-# CemuCommon always builts the precompiled header
-target_precompile_headers(CemuCommon PRIVATE precompiled.h)
+# All the targets wanting to use the precompiled.h header
+# have to link to CemuCommon
+target_precompile_headers(CemuCommon PUBLIC precompiled.h)
 target_include_directories(CemuCommon PUBLIC "../")
 
 target_link_libraries(CemuCommon PRIVATE
+	CemuCafe
+	CemuConfig
+	CemuComponents
+	Boost::nowide
+	Boost::filesystem
 	glm::glm
 )
 
@@ -82,12 +87,6 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 endif()
 
 # PUBLIC because:
-# - boost/nowide/convert.hpp is included in precompiled.h
 # - boost/predef/os.h is included in platform.h
 # - fmt/core.h is included in precompiled.h
-target_link_libraries(CemuCommon PUBLIC
-	Threads::Threads # necessary because some targets may need -pthreads
-	Boost::nowide
-	Boost::headers
-	fmt::fmt
-)
+target_link_libraries(CemuCommon PUBLIC Boost::headers fmt::fmt)

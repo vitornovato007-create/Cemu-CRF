@@ -1,12 +1,10 @@
 #include "Cafe/GameProfile/GameProfile.h"
 #include "Cafe/IOSU/legacy/iosu_crypto.h"
-#include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/CafeSystem.h"
 #include "Cemu/Logging/CemuLogging.h"
 #include "config/ActiveSettings.h"
 #include "config/LaunchSettings.h"
-#include "Cafe/Account/Account.h"
 #include "util/helpers/helpers.h"
 
 void ActiveSettings::SetPaths(bool isPortableMode,
@@ -62,6 +60,14 @@ bool ActiveSettings::DisplayDRCEnabled()
 	return g_current_game_profile->StartWithGamepadView();
 }
 
+bool ActiveSettings::FullscreenEnabled()
+{
+	if (LaunchSettings::FullscreenEnabled().has_value())
+		return LaunchSettings::FullscreenEnabled().value();
+
+	return GetConfig().fullscreen;
+}
+
 CPUMode ActiveSettings::GetCPUMode()
 {
 	auto mode = g_current_game_profile->GetCPUMode().value_or(CPUMode::Auto);
@@ -112,18 +118,6 @@ GraphicAPI ActiveSettings::GetGraphicsAPI()
 		api = kOpenGL;
 	
 	return api;
-}
-
-float ActiveSettings::GetTVGamma()
-{
-	const auto& config = GetConfig();
-	return config.overrideGammaValue.GetValue() + LatteGPUState.tvGamma * !config.overrideAppGammaPreference.GetValue();
-}
-
-float ActiveSettings::GetDRCGamma()
-{
-	const auto& config = GetConfig();
-	return config.overrideGammaValue.GetValue() + LatteGPUState.drcGamma * !config.overrideAppGammaPreference.GetValue();
 }
 
 bool ActiveSettings::AudioOutputOnlyAux()
@@ -283,7 +277,7 @@ fs::path ActiveSettings::GetDefaultMLCPath()
 	return GetUserDataPath("mlc01");
 }
 
-#if BOOST_PLAT_ANDROID
+#if __ANDROID__
 void ActiveSettings::SetNativeLibPath(const fs::path& nativeLibPath)
 {
 	s_native_lib_path = nativeLibPath;

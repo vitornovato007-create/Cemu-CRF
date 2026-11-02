@@ -1,23 +1,8 @@
 #include "input/api/Controller.h"
-#include "config/CemuConfig.h"
-#include "WindowSystem.h"
 
 ControllerBase::ControllerBase(std::string_view uuid, std::string_view display_name)
 	: m_uuid{uuid}, m_display_name{display_name}
 {
-}
-
-inline void apply_axis_button(ControllerButtonState& buttons, const glm::vec2& axis, int flag)
-{
-	if (axis.x < -ControllerState::kAxisThreshold)
-		buttons.SetButtonState(flag + (kAxisXN - kAxisXP), true);
-	else if (axis.x > ControllerState::kAxisThreshold)
-		buttons.SetButtonState(flag, true);
-
-	if (axis.y < -ControllerState::kAxisThreshold)
-		buttons.SetButtonState(flag + 1 + (kAxisXN - kAxisXP), true);
-	else if (axis.y > ControllerState::kAxisThreshold)
-		buttons.SetButtonState(flag + 1, true);
 }
 
 const ControllerState& ControllerBase::update_state()
@@ -34,9 +19,26 @@ const ControllerState& ControllerBase::update_state()
 	apply_axis_setting(result.rotation, m_default_state.rotation, m_settings.rotation);
 	apply_axis_setting(result.trigger, m_default_state.trigger, m_settings.trigger);
 
-	apply_axis_button(result.buttons, result.axis, kAxisXP);
-	apply_axis_button(result.buttons, result.rotation, kRotationXP);
-	apply_axis_button(result.buttons, result.trigger, kTriggerXP);
+#define APPLY_AXIS_BUTTON(_axis_, _flag_) \
+	if (result._axis_.x < -ControllerState::kAxisThreshold) \
+		result.buttons.SetButtonState((_flag_) + (kAxisXN - kAxisXP), true); \
+	else if (result._axis_.x > ControllerState::kAxisThreshold) \
+		result.buttons.SetButtonState((_flag_), true); \
+	if (result._axis_.y < -ControllerState::kAxisThreshold) \
+		result.buttons.SetButtonState((_flag_) + 1 + (kAxisXN - kAxisXP), true); \
+	else if (result._axis_.y > ControllerState::kAxisThreshold) \
+		result.buttons.SetButtonState((_flag_) + 1, true);
+
+	if (result.axis.x < -ControllerState::kAxisThreshold) 
+		result.buttons.SetButtonState((kAxisXP) + (kAxisXN - kAxisXP), true);
+	else if (result.axis.x > ControllerState::kAxisThreshold) 
+		result.buttons.SetButtonState((kAxisXP), true);
+	if (result.axis.y < -ControllerState::kAxisThreshold) 
+		result.buttons.SetButtonState((kAxisXP) + 1 + (kAxisXN - kAxisXP), true);
+	else if (result.axis.y > ControllerState::kAxisThreshold) 
+		result.buttons.SetButtonState((kAxisXP) + 1, true);
+	APPLY_AXIS_BUTTON(rotation, kRotationXP);
+	APPLY_AXIS_BUTTON(trigger, kTriggerXP);
 
 	/*
 // positive values
@@ -60,7 +62,8 @@ const ControllerState& ControllerBase::update_state()
 	kTriggerYN,
 	 */
 
-	WindowSystem::CaptureInput(result, m_last_state);
+
+#undef APPLY_AXIS_BUTTON
 
 	m_last_state = std::move(result);
 	return m_last_state;
@@ -192,6 +195,7 @@ std::string ControllerBase::get_button_name(uint64 button) const
 	case kTriggerXN: return "X-Trigger-";
 	case kTriggerYN: return "y-Trigger-";
 	}
+
 
 	return fmt::format("Button {}", (uint64)button);
 }

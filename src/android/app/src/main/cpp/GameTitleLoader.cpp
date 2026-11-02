@@ -10,10 +10,10 @@ std::optional<TitleInfo> getFirstTitleInfoByTitleId(TitleId titleId)
 
 GameTitleLoader::GameTitleLoader()
 {
-	m_loaderThread = std::thread(&GameTitleLoader::LoadGameTitles, this);
+	m_loaderThread = std::thread(&GameTitleLoader::loadGameTitles, this);
 }
 
-void GameTitleLoader::QueueTitle(TitleId titleId)
+void GameTitleLoader::queueTitle(TitleId titleId)
 {
 	{
 		std::lock_guard lock(m_threadMutex);
@@ -22,16 +22,16 @@ void GameTitleLoader::QueueTitle(TitleId titleId)
 	m_condVar.notify_one();
 }
 
-void GameTitleLoader::SetOnTitleLoaded(std::shared_ptr<GameTitleLoadedCallback> gameTitleLoadedCallback)
+void GameTitleLoader::setOnTitleLoaded(const std::shared_ptr<GameTitleLoadedCallback>& gameTitleLoadedCallback)
 {
 	{
 		std::lock_guard lock(m_threadMutex);
-		m_gameTitleLoadedCallback = std::move(gameTitleLoadedCallback);
+		m_gameTitleLoadedCallback = gameTitleLoadedCallback;
 	}
 	m_condVar.notify_one();
 }
 
-void GameTitleLoader::ReloadGameTitles()
+void GameTitleLoader::reloadGameTitles()
 {
 	if (m_callbackIdTitleList.has_value())
 	{
@@ -39,7 +39,7 @@ void GameTitleLoader::ReloadGameTitles()
 	}
 	m_gameInfos.clear();
 	CafeTitleList::ClearScanPaths();
-	for (auto&& gamePath : GetConfig().game_paths)
+	for (auto&& gamePath : g_config.data().game_paths)
 		CafeTitleList::AddScanPath(gamePath);
 	CafeTitleList::Refresh();
 	m_callbackIdTitleList = CafeTitleList::RegisterCallback([](CafeTitleListCallbackEvent* evt, void* ctx) { static_cast<GameTitleLoader*>(ctx)->HandleTitleListCallback(evt); }, this);
@@ -54,7 +54,7 @@ GameTitleLoader::~GameTitleLoader()
 		CafeTitleList::UnregisterCallback(m_callbackIdTitleList.value());
 }
 
-void GameTitleLoader::TitleRefresh(TitleId titleId)
+void GameTitleLoader::titleRefresh(TitleId titleId)
 {
 	using namespace std::chrono;
 	GameInfo2 gameInfo = CafeTitleList::GetGameInfo(titleId);
@@ -76,11 +76,11 @@ void GameTitleLoader::TitleRefresh(TitleId titleId)
 	if (titleInfo.has_value())
 		game.path = titleInfo->GetPath();
 	game.isFavorite = GetConfig().IsGameListFavorite(baseTitleId);
-	game.name = GetNameByTitleId(baseTitleId, titleInfo);
+	game.name = getNameByTitleId(baseTitleId, titleInfo);
 	game.version = gameInfo.GetVersion();
 	game.region = gameInfo.GetRegion();
 	game.dlc = gameInfo.GetAOCVersion();
-	std::shared_ptr<Image> icon = LoadIcon(baseTitleId, titleInfo);
+	std::shared_ptr<Image> icon = loadIcon(baseTitleId, titleInfo);
 	if (!isNewEntry)
 	{
 		// TOOD: update?
@@ -96,10 +96,10 @@ void GameTitleLoader::TitleRefresh(TitleId titleId)
 		}
 	}
 	if (m_gameTitleLoadedCallback)
-		m_gameTitleLoadedCallback->OnTitleLoaded(game, icon);
+		m_gameTitleLoadedCallback->onTitleLoaded(game, icon);
 }
 
-void GameTitleLoader::LoadGameTitles()
+void GameTitleLoader::loadGameTitles()
 {
 	while (m_continueLoading)
 	{
@@ -112,10 +112,10 @@ void GameTitleLoader::LoadGameTitles()
 			titleId = m_titlesToLoad.front();
 			m_titlesToLoad.pop_front();
 		}
-		TitleRefresh(titleId);
+		titleRefresh(titleId);
 	}
 }
-std::string GameTitleLoader::GetNameByTitleId(TitleId titleId, const std::optional<TitleInfo>& titleInfo)
+std::string GameTitleLoader::getNameByTitleId(TitleId titleId, const std::optional<TitleInfo>& titleInfo)
 {
 	auto it = m_name_cache.find(titleId);
 	if (it != m_name_cache.end())
@@ -129,7 +129,7 @@ std::string GameTitleLoader::GetNameByTitleId(TitleId titleId, const std::option
 	return name;
 }
 
-std::shared_ptr<Image> GameTitleLoader::LoadIcon(TitleId titleId, const std::optional<TitleInfo>& titleInfo)
+std::shared_ptr<Image> GameTitleLoader::loadIcon(TitleId titleId, const std::optional<TitleInfo>& titleInfo)
 {
 	if (auto iconIt = m_iconCache.find(titleId); iconIt != m_iconCache.end())
 		return iconIt->second;
@@ -148,7 +148,7 @@ std::shared_ptr<Image> GameTitleLoader::LoadIcon(TitleId titleId, const std::opt
 	}
 	auto image = std::make_shared<Image>(tgaData.value());
 	titleInfoValue.Unmount(tempMountPath);
-	if (!image->IsOk())
+	if (!image->isOk())
 		return {};
 	m_iconCache.emplace(titleId, image);
 	return image;
@@ -158,6 +158,6 @@ void GameTitleLoader::HandleTitleListCallback(CafeTitleListCallbackEvent* evt)
 {
 	if (evt->eventType == CafeTitleListCallbackEvent::TYPE::TITLE_DISCOVERED || evt->eventType == CafeTitleListCallbackEvent::TYPE::TITLE_REMOVED)
 	{
-		QueueTitle(evt->titleInfo->GetAppTitleId());
+		queueTitle(evt->titleInfo->GetAppTitleId());
 	}
 }
