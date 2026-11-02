@@ -15,7 +15,6 @@ import info.cemu.cemu.nativeinterface.NativeEmulation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.dropUnlessResumed
 import info.cemu.cemu.R
