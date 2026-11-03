@@ -65,6 +65,8 @@
 #include "Cafe/HW/SI/si.h"
 
 #include <time.h>
+#include <mutex>
+#include <thread>
 
 #if BOOST_OS_LINUX
 #include <sys/sysinfo.h>
@@ -453,6 +455,8 @@ namespace CafeSystem
 	std::optional<std::vector<std::string>> s_overrideArgs;
 
 	bool sSystemRunning = false;
+	static std::mutex sTitleLaunchMutex;
+	static std::thread sTitleLaunchThread;
 	TitleId sForegroundTitleId = 0;
 
 	GameInfo2 sGameInfo_ForegroundTitle;
@@ -877,8 +881,10 @@ namespace CafeSystem
 		auto cafeSystemCallbacks = CafeSystem::getCafeSystemCallbacks();
 		if (cafeSystemCallbacks)
 			cafeSystemCallbacks->notifyGameLoaded();
-		std::thread t(_LaunchTitleThread);
-		t.detach();
+		std::unique_lock launchLock(sTitleLaunchMutex);
+		if (sTitleLaunchThread.joinable())
+			sTitleLaunchThread.join();
+		sTitleLaunchThread = std::thread(_LaunchTitleThread);
 	}
 
 	bool IsTitleRunning()
@@ -1006,7 +1012,13 @@ namespace CafeSystem
 
 	void ShutdownTitle()
 	{
-		if(!sSystemRunning)
+		// The launch thread performs IOSU TitleStart and cemu_initForGame before
+		// returning from OSSchedulerBegin. Join it before tearing down title state
+		// so shutdown cannot race with partially initialized title services.
+		std::unique_lock launchLock(sTitleLaunchMutex);
+		if (sTitleLaunchThread.joinable())
+			sTitleLaunchThread.join();
+		if (!sSystemRunning)
 			return;
         coreinit::OSSchedulerEnd();
         Latte_Stop();
