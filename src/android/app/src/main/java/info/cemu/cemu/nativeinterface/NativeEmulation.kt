@@ -31,6 +31,9 @@ object NativeEmulation {
     external fun startGame(launchPath: String?): Int
 
     @JvmStatic
+    external fun shutdownTitle()
+
+    @JvmStatic
     external fun setReplaceTVWithPadView(swapped: Boolean)
 
     @JvmStatic
