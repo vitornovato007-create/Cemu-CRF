@@ -33,8 +33,10 @@ namespace NativeEmulation
     {
     public:
         AndroidLogCapture()
-            : m_writer(&AndroidLogCapture::WriterLoop, this)
         {
+            // Start only after every member (including the drop counter) has
+            // completed initialization.
+            m_writer = std::thread(&AndroidLogCapture::WriterLoop, this);
         }
 
         ~AndroidLogCapture() override
