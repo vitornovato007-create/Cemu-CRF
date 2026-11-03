@@ -309,6 +309,7 @@ namespace NativeEmulation
         void PersistBatch(const std::deque<std::string>& batch)
         {
             std::lock_guard lock(m_mutex);
+            std::vector<std::string> writtenThisBatch;
             for (const auto& line : batch)
             {
                 m_lines.emplace_back(line);
@@ -331,6 +332,7 @@ namespace NativeEmulation
                         {
                             m_fileBytes += line.size();
                             persisted = true;
+                            writtenThisBatch.emplace_back(line);
                         }
                         else
                         {
@@ -357,7 +359,23 @@ namespace NativeEmulation
             {
                 m_file.flush();
                 if (!m_file)
-                    m_fileError = "batch flush failed";
+                {
+                    m_fileError = "batch flush failed; batch copied to in-memory recovery buffer";
+                    // A successful write() is not durable until flush succeeds.
+                    // Keep a recovery copy so an export never silently trusts a
+                    // batch whose final flush failed.
+                    for (const auto& line : writtenThisBatch)
+                    {
+                        m_unpersistedLines.emplace_back(line);
+                        m_unpersistedBytes += line.size();
+                        while (m_unpersistedBytes > kMaxBytes && !m_unpersistedLines.empty())
+                        {
+                            m_unpersistedBytes -= m_unpersistedLines.front().size();
+                            m_unpersistedLines.pop_front();
+                            m_unpersistedWasTrimmed = true;
+                        }
+                    }
+                }
             }
         }
 
