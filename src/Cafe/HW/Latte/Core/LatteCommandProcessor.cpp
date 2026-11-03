@@ -1423,6 +1423,10 @@ void LatteCP_ProcessRingbuffer()
 	sint32 timerRecheck = 0; // estimates how much CP processing time has elapsed based on the executed commands, if the value exceeds CP_TIMER_RECHECK then _handleTimers() is called
 	while (true)
 	{
+		// Do not wait for the ringbuffer to become idle before honoring shutdown.
+		if (Latte_GetStopSignal())
+			LatteThread_Exit();
+
 		uint32 itHeader = LatteCP_readU32Deprc();
 		uint32 itHeaderType = (itHeader >> 30) & 3;
 		if (itHeaderType == 3)
