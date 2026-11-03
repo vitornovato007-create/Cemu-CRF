@@ -100,8 +100,8 @@ namespace NativeEmulation
                     return;
                 }
 
-                m_queueBytes += line.size();
                 m_queue.emplace_back(std::move(line));
+                m_queueBytes += m_queue.back().size();
                 lock.unlock();
                 m_queueCondition.notify_one();
             }
@@ -239,7 +239,6 @@ namespace NativeEmulation
         static constexpr size_t kMaxLineBytes = 256 * 1024;
         static constexpr size_t kMaxQueuedBytes = 4 * 1024 * 1024;
         static constexpr size_t kMaxQueuedLines = 4096;
-        static constexpr size_t kBatchLines = 128;
         static const std::chrono::steady_clock::time_point s_startTime;
 
         // m_mutex protects the in-memory ring and the persistent file.
@@ -271,7 +270,7 @@ namespace NativeEmulation
         {
             for (;;)
             {
-                std::vector<std::string> batch;
+                std::deque<std::string> batch;
                 {
                     std::unique_lock lock(m_queueMutex);
                     m_queueCondition.wait(lock, [this]() { return m_stopping || !m_queue.empty(); });
@@ -279,14 +278,8 @@ namespace NativeEmulation
                         break;
 
                     m_writerBusy = true;
-                    const size_t count = std::min(kBatchLines, m_queue.size());
-                    batch.reserve(count);
-                    for (size_t i = 0; i < count; ++i)
-                    {
-                        m_queueBytes -= m_queue.front().size();
-                        batch.emplace_back(std::move(m_queue.front()));
-                        m_queue.pop_front();
-                    }
+                    batch.swap(m_queue);
+                    m_queueBytes = 0;
                 }
 
                 try
@@ -311,7 +304,7 @@ namespace NativeEmulation
                 m_file.flush();
         }
 
-        void PersistBatch(const std::vector<std::string>& batch)
+        void PersistBatch(const std::deque<std::string>& batch)
         {
             std::lock_guard lock(m_mutex);
             for (const auto& line : batch)
