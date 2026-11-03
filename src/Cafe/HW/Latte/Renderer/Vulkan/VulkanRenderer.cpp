@@ -2362,6 +2362,11 @@ void VulkanRenderer::GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isD
 			formatInfoOut->decoder = TextureDecoder_D32_S8_UINT_X24::getInstance();
 			break;
 		default:
+			if (format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_UNORM)
+			{
+				cemuLog_log(LogType::Force,
+					"Depth-format classification mismatch: GX2 format 0x001a is R8_G8_B8_A8_UNORM (color), but reached the depth-texture path");
+			}
 			cemuLog_log(LogType::Force, "Unsupported depth texture format {:04x}", (uint32)format);
 			// default to placeholder format
 			formatInfoOut->vkImageFormat = VK_FORMAT_D16_UNORM;
