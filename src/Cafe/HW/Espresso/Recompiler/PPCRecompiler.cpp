@@ -730,6 +730,7 @@ void PPCRecompiler_Shutdown()
     s_recompilerThreadStopSignal = true;
     if(s_threadRecompiler.joinable())
         s_threadRecompiler.join();
+    ppcRecompilerEnabled = false;
     // clean up queues
     while(!PPCRecompilerState.targetQueue.empty())
         PPCRecompilerState.targetQueue.pop();
