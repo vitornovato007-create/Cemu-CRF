@@ -39,7 +39,7 @@ namespace NativeEmulation
             m_writer = std::thread(&AndroidLogCapture::WriterLoop, this);
         }
 
-        ~AndroidLogCapture() override
+        ~AndroidLogCapture()
         {
             {
                 std::lock_guard lock(m_queueMutex);
