@@ -694,6 +694,14 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setSurfaceSize([[maybe_unuse
 	}
 }
 
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_shutdownTitle([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+{
+	cemuLog_log(LogType::Force, "Android: requested return to main menu; shutting down foreground title");
+	CafeSystem::ShutdownTitle();
+	cemuLog_log(LogType::Force, "Android: foreground title shutdown completed; persistent Cemu logging remains active");
+}
+
 extern "C" [[maybe_unused]] JNIEXPORT jint JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeEmulation_startGame([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jstring launchPath)
 {
