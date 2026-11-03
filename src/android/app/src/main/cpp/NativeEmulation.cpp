@@ -15,10 +15,14 @@
 #include "config/ActiveSettings.h"
 #include "Cemu/ncrypto/ncrypto.h"
 #include "Cemu/Logging/CemuLogging.h"
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <deque>
 #include <fstream>
 #include <mutex>
+#include <thread>
+#include <vector>
 
 // forward declaration from main.cpp
 void CemuCommonInit();
@@ -28,71 +32,96 @@ namespace NativeEmulation
     class AndroidLogCapture final : public LogCallbacks
     {
     public:
-        void Log(std::string_view filter, std::string_view message) override
+        AndroidLogCapture()
+            : m_writer(&AndroidLogCapture::WriterLoop, this)
         {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - s_startTime).count();
+        }
 
-            std::string line = fmt::format("[+{}.{:03d}s] ", elapsed / 1000, elapsed % 1000);
-            if (!filter.empty())
+        ~AndroidLogCapture() override
+        {
             {
-                line.append("[");
-                line.append(filter);
-                line.append("] ");
+                std::lock_guard lock(m_queueMutex);
+                m_stopping = true;
             }
-            line.append(message);
-            line.push_back('\n');
-            if (line.size() > kMaxBytes - 1024)
-            {
-                line.resize(kMaxBytes - 1024);
-                line.append("\n[diagnostic line truncated at capture size limit]\n");
-            }
+            m_queueCondition.notify_all();
+            if (m_writer.joinable())
+                m_writer.join();
 
             std::lock_guard lock(m_mutex);
-            m_lines.emplace_back(line);
-            m_totalBytes += line.size();
-            while (m_totalBytes > kMaxBytes && !m_lines.empty())
-            {
-                m_totalBytes -= m_lines.front().size();
-                m_lines.pop_front();
-                m_wasTrimmed = true;
-            }
-
-            bool persisted = false;
             if (m_file.is_open())
             {
-                RotateIfNeeded(line.size());
-                if (m_file.is_open())
-                {
-                    m_file.write(line.data(), static_cast<std::streamsize>(line.size()));
-                    m_file.flush();
-                    if (m_file)
-                    {
-                        m_fileBytes += line.size();
-                        persisted = true;
-                    }
-                    else
-                    {
-                        m_fileError = "write/flush failed";
-                    }
-                }
+                m_file.flush();
+                m_file.close();
             }
-            if (!persisted)
+        }
+
+        // Keep the emulation/logging thread away from disk I/O. The callback only
+        // formats a bounded line and performs a short, non-blocking queue insert.
+        void Log(std::string_view filter, std::string_view message) override
+        {
+            try
             {
-                m_unpersistedLines.emplace_back(line);
-                m_unpersistedBytes += line.size();
-                while (m_unpersistedBytes > kMaxBytes && !m_unpersistedLines.empty())
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - s_startTime).count();
+
+                std::string line = fmt::format("[+{}.{:03d}s] ", elapsed / 1000, elapsed % 1000);
+                if (!filter.empty())
                 {
-                    m_unpersistedBytes -= m_unpersistedLines.front().size();
-                    m_unpersistedLines.pop_front();
-                    m_unpersistedWasTrimmed = true;
+                    line.append("[");
+                    line.append(filter);
+                    line.append("] ");
                 }
+                line.append(message);
+                line.push_back('\n');
+                if (line.size() > kMaxLineBytes)
+                {
+                    line.resize(kMaxLineBytes - 64);
+                    line.append("\n[diagnostic line truncated]\n");
+                }
+
+                std::unique_lock lock(m_queueMutex, std::try_to_lock);
+                if (!lock.owns_lock() || m_stopping)
+                {
+                    ++m_droppedMessages;
+                    return;
+                }
+
+                while (!m_queue.empty() &&
+                    (m_queue.size() >= kMaxQueuedLines || m_queueBytes + line.size() > kMaxQueuedBytes))
+                {
+                    m_queueBytes -= m_queue.front().size();
+                    m_queue.pop_front();
+                    ++m_droppedMessages;
+                }
+
+                if (line.size() > kMaxQueuedBytes)
+                {
+                    ++m_droppedMessages;
+                    return;
+                }
+
+                m_queueBytes += line.size();
+                m_queue.emplace_back(std::move(line));
+                lock.unlock();
+                m_queueCondition.notify_one();
+            }
+            catch (...)
+            {
+                // Diagnostics must never propagate an exception into emulation.
+                ++m_droppedMessages;
             }
         }
 
         void Log(std::string_view filter, std::wstring_view message) override
         {
-            Log(filter, boost::nowide::narrow(message));
+            try
+            {
+                Log(filter, boost::nowide::narrow(message));
+            }
+            catch (...)
+            {
+                ++m_droppedMessages;
+            }
         }
 
         void StartPersistentCapture(const fs::path& path)
@@ -144,12 +173,21 @@ namespace NativeEmulation
 
         std::string Snapshot()
         {
+            // Export is a user-initiated operation, so it may wait briefly for
+            // the writer. The emulation callback itself never waits for this.
+            {
+                std::unique_lock queueLock(m_queueMutex);
+                m_queueDrained.wait_for(queueLock, std::chrono::seconds(2), [this]() {
+                    return m_queue.empty() && !m_writerBusy;
+                });
+            }
+
             std::lock_guard lock(m_mutex);
             if (m_file.is_open())
                 m_file.flush();
 
             std::string result;
-            result.reserve(std::min<size_t>(m_fileBytes + 1024, kMaxBytes * 2 + 4096));
+            result.reserve(std::min<size_t>(m_fileBytes + 1024, kMaxBytes * 2 + 8192));
             AppendFileIfPresent(m_previousPath, result);
             AppendFileIfPresent(m_persistentPath, result);
 
@@ -165,23 +203,46 @@ namespace NativeEmulation
                     result.append("\n[WARNING] Some entries that could not be persisted were discarded at the 32 MiB recovery limit.\n");
                 if (!m_fileError.empty())
                     result.append("\n[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\n");
-                return result;
+            }
+            else
+            {
+                result.reserve(m_totalBytes + 512);
+                result.append("Persistent log file unavailable; showing bounded in-memory capture only.\n");
+                if (!m_fileError.empty())
+                    result.append("[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\n");
+                if (m_wasTrimmed)
+                    result.append("[WARNING] Older in-memory log entries were discarded at the 32 MiB limit.\n");
+                for (const auto& line : m_lines)
+                    result.append(line);
             }
 
-            result.reserve(m_totalBytes + 256);
-            result.append("Persistent log file unavailable; showing bounded in-memory capture only.\n");
-            if (!m_fileError.empty())
-                result.append("[DIAGNOSTIC CAPTURE WARNING] ").append(m_fileError).append("\n");
-            if (m_wasTrimmed)
-                result.append("[WARNING] Older in-memory log entries were discarded at the 32 MiB limit.\n");
-            for (const auto& line : m_lines)
-                result.append(line);
+            const uint64 dropped = m_droppedMessages.load();
+            if (dropped != 0)
+                result.append(fmt::format("\n[WARNING] {} diagnostic messages were dropped to keep logging non-blocking and bounded.\n", dropped));
+
+            // Include entries still queued if the writer did not drain within
+            // the export wait window.
+            {
+                std::lock_guard queueLock(m_queueMutex);
+                if (!m_queue.empty())
+                {
+                    result.append("\n===== Entries still queued at export time =====\n");
+                    for (const auto& line : m_queue)
+                        result.append(line);
+                }
+            }
             return result;
         }
 
     private:
         static constexpr size_t kMaxBytes = 32 * 1024 * 1024;
+        static constexpr size_t kMaxLineBytes = 256 * 1024;
+        static constexpr size_t kMaxQueuedBytes = 4 * 1024 * 1024;
+        static constexpr size_t kMaxQueuedLines = 4096;
+        static constexpr size_t kBatchLines = 128;
         static const std::chrono::steady_clock::time_point s_startTime;
+
+        // m_mutex protects the in-memory ring and the persistent file.
         std::mutex m_mutex;
         std::deque<std::string> m_lines;
         fs::path m_persistentPath;
@@ -194,6 +255,116 @@ namespace NativeEmulation
         bool m_wasTrimmed = false;
         bool m_unpersistedWasTrimmed = false;
         std::string m_fileError;
+
+        // Separate bounded queue: the callback never performs file operations.
+        std::mutex m_queueMutex;
+        std::condition_variable m_queueCondition;
+        std::condition_variable m_queueDrained;
+        std::deque<std::string> m_queue;
+        size_t m_queueBytes = 0;
+        bool m_writerBusy = false;
+        bool m_stopping = false;
+        std::thread m_writer;
+        std::atomic<uint64> m_droppedMessages{ 0 };
+
+        void WriterLoop()
+        {
+            for (;;)
+            {
+                std::vector<std::string> batch;
+                {
+                    std::unique_lock lock(m_queueMutex);
+                    m_queueCondition.wait(lock, [this]() { return m_stopping || !m_queue.empty(); });
+                    if (m_queue.empty() && m_stopping)
+                        break;
+
+                    m_writerBusy = true;
+                    const size_t count = std::min(kBatchLines, m_queue.size());
+                    batch.reserve(count);
+                    for (size_t i = 0; i < count; ++i)
+                    {
+                        m_queueBytes -= m_queue.front().size();
+                        batch.emplace_back(std::move(m_queue.front()));
+                        m_queue.pop_front();
+                    }
+                }
+
+                try
+                {
+                    PersistBatch(batch);
+                }
+                catch (...)
+                {
+                    m_droppedMessages.fetch_add(batch.size());
+                }
+
+                {
+                    std::lock_guard lock(m_queueMutex);
+                    m_writerBusy = false;
+                    if (m_queue.empty())
+                        m_queueDrained.notify_all();
+                }
+            }
+
+            std::lock_guard lock(m_mutex);
+            if (m_file.is_open())
+                m_file.flush();
+        }
+
+        void PersistBatch(const std::vector<std::string>& batch)
+        {
+            std::lock_guard lock(m_mutex);
+            for (const auto& line : batch)
+            {
+                m_lines.emplace_back(line);
+                m_totalBytes += line.size();
+                while (m_totalBytes > kMaxBytes && !m_lines.empty())
+                {
+                    m_totalBytes -= m_lines.front().size();
+                    m_lines.pop_front();
+                    m_wasTrimmed = true;
+                }
+
+                bool persisted = false;
+                if (m_file.is_open())
+                {
+                    RotateIfNeeded(line.size());
+                    if (m_file.is_open())
+                    {
+                        m_file.write(line.data(), static_cast<std::streamsize>(line.size()));
+                        if (m_file)
+                        {
+                            m_fileBytes += line.size();
+                            persisted = true;
+                        }
+                        else
+                        {
+                            m_fileError = "write failed";
+                        }
+                    }
+                }
+
+                if (!persisted)
+                {
+                    m_unpersistedLines.emplace_back(line);
+                    m_unpersistedBytes += line.size();
+                    while (m_unpersistedBytes > kMaxBytes && !m_unpersistedLines.empty())
+                    {
+                        m_unpersistedBytes -= m_unpersistedLines.front().size();
+                        m_unpersistedLines.pop_front();
+                        m_unpersistedWasTrimmed = true;
+                    }
+                }
+            }
+
+            // One flush per batch instead of one flush per log message.
+            if (m_file.is_open())
+            {
+                m_file.flush();
+                if (!m_file)
+                    m_fileError = "batch flush failed";
+            }
+        }
 
         void AppendFileIfPresent(const fs::path& path, std::string& output)
         {
@@ -241,7 +412,6 @@ namespace NativeEmulation
 
             const std::string marker = "===== Previous diagnostic segment rotated; older entries are in .previous =====\n";
             m_file.write(marker.data(), static_cast<std::streamsize>(marker.size()));
-            m_file.flush();
             if (m_file)
                 m_fileBytes = marker.size();
             else
