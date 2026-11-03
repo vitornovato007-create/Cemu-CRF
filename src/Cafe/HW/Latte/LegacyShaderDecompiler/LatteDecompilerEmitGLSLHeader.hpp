@@ -381,6 +381,15 @@ namespace LatteDecompiler
 			if (psInputIndex == -1)
 				continue; // no ps input
 
+			// Multiple GX2 export slots can resolve to the same pixel-shader
+			// input semantic. GLSL must declare that interface location only once.
+			if (activePassParams.at(psInputIndex))
+			{
+				cemuLog_log(LogType::Force,
+					"Shader {:016x} has duplicate VS output semantic {} at interface location {}; emitting one GLSL declaration",
+					shaderContext->shaderBaseHash, vsSemanticId, psInputIndex);
+				continue;
+			}
 			activePassParams.at(psInputIndex) = true;
 
 			src->addFmt("layout(location = {}) ", psInputIndex);
