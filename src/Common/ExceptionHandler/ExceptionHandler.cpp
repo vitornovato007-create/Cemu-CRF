@@ -31,9 +31,13 @@ void CrashLog_SetOutputChannels(bool writeToStdErr, bool writeToLogTxt)
 // outputs to both stderr and log.txt
 void CrashLog_WriteLine(std::string_view text, bool newLine)
 {
-    if(s_writeToLogTxt)
+    if (s_writeToLogTxt)
+    {
         cemuLog_writeLineToLog(text, false, newLine);
+        // Android capture only enqueues this line; it does not perform disk I/O
+        // on the crash-reporting thread.
         cemuLog_dispatchCrashText(text);
+    }
     if(s_writeToStdErr)
     {
         fwrite(text.data(), sizeof(char), text.size(), stderr);
