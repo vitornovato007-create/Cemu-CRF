@@ -42,7 +42,6 @@ import info.cemu.cemu.nativeinterface.NativeSwkbd.setCurrentInputText
 import info.cemu.cemu.settings.EmulationScreenSettings
 import info.cemu.cemu.settings.SettingsManager
 import java.lang.ref.WeakReference
-import kotlin.system.exitProcess
 
 class EmulationActivity : AppCompatActivity() {
     private inner class CanvasSurfaceHolderCallback(val isMainCanvas: Boolean) :
@@ -87,6 +86,7 @@ class EmulationActivity : AppCompatActivity() {
     private lateinit var inputOverlaySurfaceView: InputOverlaySurfaceView
     private lateinit var sensorManager: SensorManager
     private var hasEmulationError = false
+    private var isExiting = false
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (inputManager.onMotionEvent(event)) {
@@ -383,8 +383,20 @@ class EmulationActivity : AppCompatActivity() {
     }
 
     private fun quit() {
-        finishAffinity()
-        exitProcess(0)
+        if (isExiting) return
+        isExiting = true
+
+        // Stop only the current title. Do not shut down the Android process or
+        // persistent Cemu logging, so MainActivity can export the Vulkan log.
+        Thread {
+            try {
+                NativeEmulation.shutdownTitle()
+            } catch (error: Throwable) {
+                android.util.Log.e("Cemu", "Failed to shut down foreground title cleanly", error)
+            } finally {
+                runOnUiThread { finish() }
+            }
+        }.start()
     }
 
     companion object {
