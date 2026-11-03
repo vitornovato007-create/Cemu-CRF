@@ -6,6 +6,7 @@
 #include "util/helpers/ConcurrentQueue.h"
 #include "Cemu/FileCache/FileCache.h"
 
+#include <charconv>
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 #include <util/helpers/helpers.h>
@@ -15,6 +16,53 @@ class FileCache* s_spirvCache{nullptr};
 
 extern std::atomic_int g_compiled_shaders_total;
 extern std::atomic_int g_compiled_shaders_async;
+
+
+// On GLSL failures, include only the source lines around the compiler-reported
+// location. This is much more useful than dumping every generated shader and
+// keeps diagnostic volume bounded on mobile devices.
+static void LogShaderSourceErrorContext(std::string_view source, std::string_view infoLog, uint64 baseHash, uint64 auxHash)
+{
+	size_t errorLine = 0;
+	size_t marker = infoLog.find("0:");
+	if (marker != std::string_view::npos)
+	{
+		marker += 2;
+		const char* begin = infoLog.data() + marker;
+		const char* end = infoLog.data() + infoLog.size();
+		auto parsed = std::from_chars(begin, end, errorLine);
+		if (parsed.ec != std::errc{})
+			errorLine = 0;
+	}
+
+	if (errorLine == 0)
+	{
+		cemuLog_log(LogType::Force, "GLSL source context unavailable for {:016x}_{:016x} (compiler did not provide a source line).",
+			baseHash, auxHash);
+		return;
+	}
+
+	std::vector<std::string_view> lines;
+	for (size_t offset = 0; offset <= source.size();)
+	{
+		size_t next = source.find('\n', offset);
+		if (next == std::string_view::npos)
+		{
+			lines.emplace_back(source.substr(offset));
+			break;
+		}
+		lines.emplace_back(source.substr(offset, next - offset));
+		offset = next + 1;
+	}
+
+	const size_t firstLine = errorLine > 4 ? errorLine - 4 : 1;
+	const size_t lastLine = std::min(lines.size(), errorLine + 4);
+	cemuLog_log(LogType::Force, "GLSL source context for {:016x}_{:016x}, around line {}:",
+		baseHash, auxHash, errorLine);
+
+	for (size_t line = firstLine; line <= lastLine && line <= lines.size(); ++line)
+		cemuLog_log(LogType::Force, "{:04d}: {}", line, lines[line - 1]);
+}
 
 consteval TBuiltInResource GetDefaultBuiltInResource()
 {
@@ -352,8 +400,8 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	if (!Shader.parse(&Resources, 100, false, messagesParseLink))
 	{
 		cemuLog_log(LogType::Force, fmt::format("GLSL parsing failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Shader.getInfoLog()));
-		cemuLog_logDebug(LogType::Force, "GLSL source:\n{}", m_glslCode);
-		cemu_assert_debug(false);
+		LogShaderSourceErrorContext(PreprocessedGLSL, Shader.getInfoLog(), m_baseHash, m_auxHash);
+		// A malformed guest shader must not abort the entire emulator in Debug builds.
 		FinishCompilation();
 		return;
 	}
@@ -364,7 +412,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	if (!Program.link(messagesParseLink))
 	{
 		cemuLog_log(LogType::Force, fmt::format("GLSL linking failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Program.getInfoLog()));
-		cemu_assert_debug(false);
+		// Treat a failed shader as unavailable instead of terminating emulation.
 		FinishCompilation();
 		return;
 	}
