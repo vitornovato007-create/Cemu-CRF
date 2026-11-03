@@ -60,16 +60,16 @@ const std::map<LogType, std::string> g_logging_window_mapping
 	{LogType::VulkanValidation,   "Vulkan validation layer"},
 };
 
-LogCallbacks* g_logCallbacks = nullptr;
+std::atomic<LogCallbacks*> g_logCallbacks{ nullptr };
 
 void cemuLog_registerLogCallbacks(LogCallbacks* logCallbacks)
 {
-	g_logCallbacks = logCallbacks;
+	g_logCallbacks.store(logCallbacks, std::memory_order_release);
 }
 
 void cemuLog_unregisterLogCallbacks()
 {
-	g_logCallbacks = nullptr;
+	g_logCallbacks.store(nullptr, std::memory_order_release);
 }
 
 
@@ -160,12 +160,12 @@ bool cemuLog_log(LogType type, std::string_view text)
 
 	const auto it = std::find_if(g_logging_window_mapping.cbegin(), g_logging_window_mapping.cend(),
 		[type](const auto& entry) { return entry.first == type; });
-	if (g_logCallbacks)
+	if (auto* callbacks = g_logCallbacks.load(std::memory_order_acquire))
 	{
 		if (it == g_logging_window_mapping.cend())
-			g_logCallbacks->Log("", text);
+			callbacks->Log("", text);
 		else
-			g_logCallbacks->Log(it->second, text);
+			callbacks->Log(it->second, text);
 	}
 
 	return true;
@@ -203,6 +203,6 @@ void cemuLog_setActiveLoggingFlags(uint64 flagMask)
 
 void cemuLog_dispatchCrashText(std::string_view text)
 {
-    if (g_logCallbacks)
-        g_logCallbacks->Log("Crash report", text);
+    if (auto* callbacks = g_logCallbacks.load(std::memory_order_acquire))
+        callbacks->Log("Crash report", text);
 }
