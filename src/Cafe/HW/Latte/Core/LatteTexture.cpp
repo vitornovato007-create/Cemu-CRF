@@ -9,6 +9,7 @@
 #include "Cafe/GraphicPack/GraphicPack2.h"
 
 #include <boost/container/small_vector.hpp>
+#include <atomic>
 
 struct TexMemOccupancyEntry
 {
@@ -1167,6 +1168,22 @@ LatteTextureSliceMipInfo* LatteTexture::GetSliceMipArrayEntry(sint32 sliceIndex,
 	return sliceMipInfo + GetSliceMipArrayIndex(sliceIndex, mipIndex);
 }
 
+namespace
+{
+	std::atomic<uint64> s_textureConstructedTotal{ 0 };
+	std::atomic<uint64> s_textureDestroyedTotal{ 0 };
+	std::atomic<uint64> s_textureCurrentlyAlive{ 0 };
+}
+
+LatteTextureLifecycleDiagnostics LatteTexture_GetLifecycleDiagnostics()
+{
+	LatteTextureLifecycleDiagnostics result;
+	result.constructedTotal = s_textureConstructedTotal.load(std::memory_order_relaxed);
+	result.destroyedTotal = s_textureDestroyedTotal.load(std::memory_order_relaxed);
+	result.currentlyAlive = s_textureCurrentlyAlive.load(std::memory_order_relaxed);
+	return result;
+}
+
 std::vector<LatteTexture*> sAllTextures; // entries can be nullptr
 std::vector<size_t> sAllTextureFreeIndices;
 
@@ -1308,10 +1325,16 @@ LatteTexture::LatteTexture(Latte::E_DIM dim, MPTR physAddress, MPTR physMipAddre
 	{
 		this->enableReadback = true;
 	}
+
+	// Count only objects whose constructor completed successfully.
+	s_textureConstructedTotal.fetch_add(1, std::memory_order_relaxed);
+	s_textureCurrentlyAlive.fetch_add(1, std::memory_order_relaxed);
 }
 
 LatteTexture::~LatteTexture()
 {
+	s_textureDestroyedTotal.fetch_add(1, std::memory_order_relaxed);
+	s_textureCurrentlyAlive.fetch_sub(1, std::memory_order_relaxed);
 	_RemoveTextureFromGlobalList(this);
 	cemu_assert_debug(baseView == nullptr);
 	cemu_assert_debug(views.empty());
