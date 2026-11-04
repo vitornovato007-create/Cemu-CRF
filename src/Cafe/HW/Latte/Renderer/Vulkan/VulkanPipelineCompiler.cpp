@@ -823,7 +823,7 @@ void PipelineCompiler::InitDescriptorSetLayouts(VulkanRenderer* vkRenderer, Pipe
 		if (placeholderLayoutResult != VK_SUCCESS)
 		{
 			s_vkDescriptorLayoutFailures.fetch_add(1, std::memory_order_relaxed);
-			vkRenderer->UnrecoverableError(fmt::format("Failed to create placeholder descriptor set layout: VkResult={}, shader={:016x}, stageIndex={}, layoutIndex={}", (sint32)placeholderLayoutResult, geometryShader->baseHash, i, descriptorSetLayoutCount).c_str());
+			vkRenderer->UnrecoverableError(fmt::format("Failed to create placeholder descriptor set layout: VkResult={}, shader={:016x}, layoutIndex={}", (sint32)placeholderLayoutResult, geometryShader->baseHash, descriptorSetLayoutCount).c_str());
 		}
 		s_vkDescriptorLayoutSuccesses.fetch_add(1, std::memory_order_relaxed);
 		descriptorSetLayoutCount++;
