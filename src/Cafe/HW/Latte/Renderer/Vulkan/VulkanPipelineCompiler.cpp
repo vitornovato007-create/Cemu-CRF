@@ -4,6 +4,40 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanPipelineStableCache.h"
 #include "Cafe/HW/Latte/Core/LatteShader.h"
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
+#include <atomic>
+
+namespace
+{
+	std::atomic<uint64> s_vkDescriptorLayoutAttempts{ 0 };
+	std::atomic<uint64> s_vkDescriptorLayoutSuccesses{ 0 };
+	std::atomic<uint64> s_vkDescriptorLayoutFailures{ 0 };
+	std::atomic<uint64> s_vkPipelineLayoutAttempts{ 0 };
+	std::atomic<uint64> s_vkPipelineLayoutSuccesses{ 0 };
+	std::atomic<uint64> s_vkPipelineLayoutFailures{ 0 };
+	std::atomic<uint64> s_vkGraphicsPipelineAttempts{ 0 };
+	std::atomic<uint64> s_vkGraphicsPipelineSuccesses{ 0 };
+	std::atomic<uint64> s_vkGraphicsPipelineFailures{ 0 };
+	std::atomic<uint64> s_vkPipelineCompileRequired{ 0 };
+	std::atomic<uint64> s_vkPipelineOutOfMemoryRetries{ 0 };
+}
+
+VulkanPipelineDiagnostics VulkanPipelineCompiler_GetDiagnostics()
+{
+	VulkanPipelineDiagnostics result;
+	result.descriptorLayoutAttempts = s_vkDescriptorLayoutAttempts.load(std::memory_order_relaxed);
+	result.descriptorLayoutSuccesses = s_vkDescriptorLayoutSuccesses.load(std::memory_order_relaxed);
+	result.descriptorLayoutFailures = s_vkDescriptorLayoutFailures.load(std::memory_order_relaxed);
+	result.pipelineLayoutAttempts = s_vkPipelineLayoutAttempts.load(std::memory_order_relaxed);
+	result.pipelineLayoutSuccesses = s_vkPipelineLayoutSuccesses.load(std::memory_order_relaxed);
+	result.pipelineLayoutFailures = s_vkPipelineLayoutFailures.load(std::memory_order_relaxed);
+	result.graphicsPipelineAttempts = s_vkGraphicsPipelineAttempts.load(std::memory_order_relaxed);
+	result.graphicsPipelineSuccesses = s_vkGraphicsPipelineSuccesses.load(std::memory_order_relaxed);
+	result.graphicsPipelineFailures = s_vkGraphicsPipelineFailures.load(std::memory_order_relaxed);
+	result.pipelineCompileRequired = s_vkPipelineCompileRequired.load(std::memory_order_relaxed);
+	result.outOfDeviceMemoryRetries = s_vkPipelineOutOfMemoryRetries.load(std::memory_order_relaxed);
+	return result;
+}
+
 #include "Cafe/OS/libs/gx2/GX2.h"
 #include "config/ActiveSettings.h"
 #include "util/helpers/Serializer.h"
@@ -383,8 +417,15 @@ void PipelineCompiler::CreateDescriptorSetLayout(VulkanRenderer* vkRenderer, Lat
 	layoutInfo.bindingCount = descriptorSetLayoutBindings.size();
 	layoutInfo.pBindings = descriptorSetLayoutBindings.data();
 
-	if (vkCreateDescriptorSetLayout(vkRenderer->m_logicalDevice, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
-		vkRenderer->UnrecoverableError(fmt::format("Failed to create descriptor set layout for shader {0:#x}", shader->baseHash).c_str());
+	s_vkDescriptorLayoutAttempts.fetch_add(1, std::memory_order_relaxed);
+	const VkResult descriptorLayoutResult = vkCreateDescriptorSetLayout(vkRenderer->m_logicalDevice, &layoutInfo, nullptr, &layout);
+	if (descriptorLayoutResult != VK_SUCCESS)
+	{
+		s_vkDescriptorLayoutFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Vulkan descriptor layout creation failed: shader={:016x}, stage={}, bindings={}, VkResult={}", shader->baseHash, (uint32)shader->shaderType, descriptorSetLayoutBindings.size(), (sint32)descriptorLayoutResult);
+		vkRenderer->UnrecoverableError(fmt::format("Failed to create descriptor set layout for shader {0:#x}: VkResult={1}", shader->baseHash, (sint32)descriptorLayoutResult).c_str());
+	}
+	s_vkDescriptorLayoutSuccesses.fetch_add(1, std::memory_order_relaxed);
 }
 
 bool PipelineCompiler::InitShaderStages(VulkanRenderer* vkRenderer, RendererShaderVk* vkVertexShader, RendererShaderVk* vkPixelShader, RendererShaderVk* vkGeometryShader)
@@ -919,13 +960,17 @@ bool PipelineCompiler::InitFromCurrentGPUState(PipelineInfo* pipelineInfo, const
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 
+	s_vkPipelineLayoutAttempts.fetch_add(1, std::memory_order_relaxed);
 	VkResult result = vkCreatePipelineLayout(vkRenderer->m_logicalDevice, &pipelineLayoutInfo, nullptr, &m_pipelineLayout);
 	if (result != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Failed to create pipeline layout: {}", result);
+		s_vkPipelineLayoutFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Failed to create pipeline layout: VkResult={}, descriptorSetLayouts={}", (sint32)result, descriptorSetLayoutCount);
 		s_nvidiaWorkaround.unlock();
 		return false;
 	}
+
+	s_vkPipelineLayoutSuccesses.fetch_add(1, std::memory_order_relaxed);
 
 	// ###################################################
 
@@ -1043,24 +1088,29 @@ bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool show
 	while (retryCount < 3)
 	{
 		std::shared_lock lock(vkRenderer->m_pipeline_cache_save_mutex);
+		s_vkGraphicsPipelineAttempts.fetch_add(1, std::memory_order_relaxed);
 		result = vkCreateGraphicsPipelines(vkRenderer->m_logicalDevice, vkRenderer->m_pipeline_cache, 1, &pipelineInfo, nullptr, &pipeline);
 		lock.unlock();
 		if (result != VK_ERROR_OUT_OF_DEVICE_MEMORY)
 			break;
+		s_vkPipelineOutOfMemoryRetries.fetch_add(1, std::memory_order_relaxed);
 		retryCount++;
 	}
 
 	if (result == VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT)
 	{
+		s_vkPipelineCompileRequired.fetch_add(1, std::memory_order_relaxed);
 		return false;
 	}
 	else if (result == VK_SUCCESS)
 	{
+		s_vkGraphicsPipelineSuccesses.fetch_add(1, std::memory_order_relaxed);
 		m_vkrObjPipeline->SetPipeline(pipeline);
 	}
 	else
 	{
-		cemuLog_log(LogType::Force, "Failed to create graphics pipeline. Error {}", (sint32)result);
+		s_vkGraphicsPipelineFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Failed to create graphics pipeline. VkResult={}, vertexShader={:016x}, pixelShader={:016x}, geometryShader={:016x}, renderPass={}", (sint32)result, m_vkVertexShader ? m_vkVertexShader->GetBaseHash() : 0, m_vkPixelShader ? m_vkPixelShader->GetBaseHash() : 0, m_vkGeometryShader ? m_vkGeometryShader->GetBaseHash() : 0, (void*)m_renderPassObj);
 		cemu_assert_debug(false);
 		return true; // true indicates that caller should no longer attempt to compile this pipeline again
 	}
