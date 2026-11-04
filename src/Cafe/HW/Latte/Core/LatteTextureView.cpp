@@ -150,7 +150,7 @@ LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 widt
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.format == format && it.dim == dim &&
+		if (it.format == format && it.dim == dim && !it.isDepth &&
 			it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
 			&& it.firstMip == firstMip && it.numMip == numMip
 			&& it.firstSlice == firstSlice && it.numSlice == numSlice
