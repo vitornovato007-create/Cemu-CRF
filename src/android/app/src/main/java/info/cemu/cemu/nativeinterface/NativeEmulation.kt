@@ -43,11 +43,11 @@ object NativeEmulation {
     external fun supportsLoadingCustomDriver(): Boolean
 
     @JvmStatic
-    external fun getVulkanDiagnosticLog(): String
+    external fun getMonitorLog(): String
 
     @JvmStatic
-    external fun setVulkanValidationEnabled(enabled: Boolean)
+    external fun setMonitorEnabled(enabled: Boolean)
 
     @JvmStatic
-    external fun isVulkanValidationEnabled(): Boolean
+    external fun isMonitorEnabled(): Boolean
 }
