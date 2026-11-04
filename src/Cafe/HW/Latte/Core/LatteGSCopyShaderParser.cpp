@@ -19,7 +19,7 @@ bool LatteGSCopyShaderParser_addFetchedParam(LatteParsedGSCopyShader* shaderCont
 
 bool LatteGSCopyShaderParser_assignRegisterParameterOutput(LatteParsedGSCopyShader* shaderContext, uint32 gprIndex, uint32 exportType, uint32 exportParam)
 {
-	if (exportParam >= 0x100 || (exportType == 2 && exportParam >= 16))
+	if (exportParam >= 0xFF || (exportType == 2 && exportParam >= 16))
 	{
 		cemuLog_log(LogType::Force, "Copy shader has unsupported export parameter: gpr={}, exportType={}, exportParam={}", gprIndex, exportType, exportParam);
 		return false;
