@@ -236,8 +236,10 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32
 		if (!it.isDepth && it.tileMode == tileMode && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
+			{
 				s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 				return it.view;
+			}
 		}
 	}
 	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
@@ -262,8 +264,10 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr,
 		if (!it.isDepth && it.tileMode == tileMode && it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
+			{
 				s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 				return it.view;
+			}
 		}
 	}
 	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
@@ -284,8 +288,10 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSliceEx(MPTR physAddr, sint
 		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth && it.tileMode == tileMode)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
+			{
 				s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 				return it.view;
+			}
 		}
 	}
 	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
