@@ -3891,7 +3891,7 @@ LatteTextureReadbackInfo* VulkanRenderer::texture_createReadback(LatteTextureVie
 		throw std::runtime_error(fmt::format("Texture readback allocation exceeds 32-bit buffer limits: bytes={}", memRequirements.size));
 	const uint32 uploadSize = (linearImageSize == 0) ? (uint32)memRequirements.size : linearImageSize;
 	const uint32 uploadAlignment = std::max<uint32>(256, GetNonCoherentAtomSize());
-	if (uploadSize == 0 || uploadSize > TEXTURE_READBACK_SIZE - uploadAlignment)
+	if (uploadAlignment >= TEXTURE_READBACK_SIZE || uploadSize == 0 || uploadSize > TEXTURE_READBACK_SIZE - uploadAlignment)
 		throw std::runtime_error(fmt::format("Texture readback does not fit the shared buffer: bytes={}, capacity={}", uploadSize, TEXTURE_READBACK_SIZE));
 	m_textureReadbackBufferWriteIndex = (m_textureReadbackBufferWriteIndex + uploadAlignment - 1) & ~(uploadAlignment - 1);
 
