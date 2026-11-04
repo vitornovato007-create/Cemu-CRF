@@ -21,8 +21,9 @@ public:
 		return m_image_size;
 	}
 
-	void SetBuffer(VkBuffer buffer, VkDeviceMemory memory, uint8* buffer_ptr, const uint32 buffer_offset, const uint32 transferSize, const uint32 bufferSize)
+	void SetBuffer(VkBuffer buffer, VkDeviceMemory memory, uint8* buffer_ptr, const uint32 buffer_offset, const uint32 transferSize, const uint32 bufferSize, const bool memoryIsCoherent)
 	{
+		m_memoryIsCoherent = memoryIsCoherent;
 		m_buffer = buffer;
 		m_bufferMemory = memory;
 		m_buffer_ptr = buffer_ptr;
@@ -40,5 +41,6 @@ private:
 	uint32 m_buffer_offset = 0;
 	uint32 m_transferSize = 0;
 	uint32 m_bufferSize = 0;
+	bool m_memoryIsCoherent = false;
 	uint64 m_associatedCommandBufferId = 0;
 };
