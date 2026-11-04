@@ -1832,13 +1832,17 @@ void VulkanRenderer::CreateNullObjects()
 
 void VulkanRenderer::DeleteNullTexture(NullTexture& nullTex)
 {
-	vkDestroySampler(m_logicalDevice, nullTex.sampler, nullptr);
+	if (nullTex.sampler != VK_NULL_HANDLE)
+		vkDestroySampler(m_logicalDevice, nullTex.sampler, nullptr);
 	nullTex.sampler = VK_NULL_HANDLE;
-	vkDestroyImageView(m_logicalDevice, nullTex.view, nullptr);
+	if (nullTex.view != VK_NULL_HANDLE)
+		vkDestroyImageView(m_logicalDevice, nullTex.view, nullptr);
 	nullTex.view = VK_NULL_HANDLE;
-	vkDestroyImage(m_logicalDevice, nullTex.image, nullptr);
+	if (nullTex.image != VK_NULL_HANDLE)
+		vkDestroyImage(m_logicalDevice, nullTex.image, nullptr);
 	nullTex.image = VK_NULL_HANDLE;
-	memoryManager->imageMemoryFree(nullTex.allocation);
+	if (nullTex.allocation != nullptr && memoryManager)
+		memoryManager->imageMemoryFree(nullTex.allocation);
 	nullTex.allocation = nullptr;
 }
 
