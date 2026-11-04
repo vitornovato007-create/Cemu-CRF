@@ -29,12 +29,15 @@ uint32 _quickStochasticHash(void* texData, uint32 memRange)
 	uint64 hashVal = 0;
 	memRange /= sizeof(uint64);
 
-	uint32 memStep = memRange / 37; // use prime here to avoid memStep aligning nicely with pitch of texture, leading to sampling only along the border of a texture
-	for (sint32 i = 0; i < 37; i++)
+	if (memRange == 0)
+		return 0;
+	const uint32 sampleCount = (std::min)(memRange, 37u);
+	const uint32 lastSample = memRange - 1;
+	for (uint32 i = 0; i < sampleCount; ++i)
 	{
-		hashVal += *texDataU64;
+		const uint32 sampleIndex = sampleCount == 1 ? 0 : (i * lastSample) / (sampleCount - 1);
+		hashVal += texDataU64[sampleIndex];
 		hashVal = (hashVal << 3) | (hashVal >> 61);
-		texDataU64 += memStep;
 	}
 	return (uint32)hashVal ^ (uint32)(hashVal >> 32);
 }

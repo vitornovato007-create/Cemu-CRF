@@ -1009,9 +1009,9 @@ bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool show
 		creationFeedback = {};
 		creationFeedback.flags = VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT_EXT;
 
-		creationStageFeedback.reserve(pipelineInfo.stageCount);
+		creationStageFeedback.resize(pipelineInfo.stageCount);
 		for (uint32_t i = 0; i < pipelineInfo.stageCount; ++i)
-			creationStageFeedback.data()[i] = { VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT_EXT, 0 };
+			creationStageFeedback[i] = { VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT_EXT, 0 };
 
 		creationFeedbackInfo = {};
 		creationFeedbackInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO_EXT;

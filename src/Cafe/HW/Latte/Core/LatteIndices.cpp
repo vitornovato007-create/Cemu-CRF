@@ -3,6 +3,7 @@
 #include "Cafe/HW/Latte/ISA/RegDefines.h"
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
 #include "Common/cpu_features.h"
+#include <cstdint>
 
 #if defined(ARCH_X86_64) && defined(__GNUC__)
 #include <immintrin.h>
@@ -31,12 +32,24 @@ struct
 
 void LatteIndices_invalidate(const void* memPtr, uint32 size)
 {
-	for(auto& entry : LatteIndexCache.entry)
+	if (memPtr == nullptr || size == 0)
+		return;
+	const uintptr_t modifiedStart = reinterpret_cast<uintptr_t>(memPtr);
+	const uintptr_t modifiedEnd = modifiedStart + size;
+	if (modifiedEnd < modifiedStart)
+		return;
+	for (auto& entry : LatteIndexCache.entry)
 	{
-		if (entry.lastPtr >= memPtr && (entry.lastPtr < ((uint8*)memPtr + size)) )
+		if (entry.lastPtr == nullptr)
+			continue;
+		const uint32 indexSize = (entry.lastIndexType == LatteIndexType::U16_LE || entry.lastIndexType == LatteIndexType::U16_BE) ? 2 : 4;
+		const uintptr_t cachedStart = reinterpret_cast<uintptr_t>(entry.lastPtr);
+		const uintptr_t cachedEnd = cachedStart + static_cast<uintptr_t>(entry.lastCount) * indexSize;
+		if (cachedEnd < cachedStart)
+			continue;
+		if (cachedStart < modifiedEnd && modifiedStart < cachedEnd)
 		{
-			if(entry.lastPtr != nullptr)
-				g_renderer->indexData_releaseIndexMemory(entry.indexAllocation);
+			g_renderer->indexData_releaseIndexMemory(entry.indexAllocation);
 			entry.lastPtr = nullptr;
 			entry.lastCount = 0;
 		}

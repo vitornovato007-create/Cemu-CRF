@@ -302,10 +302,9 @@ PipelineInfo* VulkanRenderer::draw_createGraphicsPipeline(uint32 indexCount)
 	pipelineCompiler->InitFromCurrentGPUState(pipelineInfo, LatteGPUState.contextNew, vkFBO->GetRenderPassObj(), requiresRobustBufferAccess);
 	pipelineCompiler->TrackAsCached(vsBaseHash, pipelineHash);
 
-	// use heuristics based on parameter patterns to determine if the current drawcall is essential (non-skipable)
-	bool allowAsyncCompile = false; 
-	if (GetConfig().async_compile)
-		allowAsyncCompile = IsAsyncPipelineAllowed(indexCount);
+	// draw_execute() cannot replay a draw call after asynchronous pipeline compilation.
+	// Keep creation synchronous to avoid silently dropping one-shot draw calls.
+	bool allowAsyncCompile = false;
 
 	if (allowAsyncCompile)
 	{
@@ -798,7 +797,7 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 			samplerInfo.minFilter = (filterMin == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::POINT || filterMin == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::ANISO_POINT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
 
 			auto filterMag = samplerWords->WORD0.get_XY_MAG_FILTER();
-			samplerInfo.magFilter = (filterMag == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::POINT || filterMin == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::ANISO_POINT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+			samplerInfo.magFilter = (filterMag == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::POINT || filterMag == Latte::LATTE_SQ_TEX_SAMPLER_WORD0_0::E_XY_FILTER::ANISO_POINT) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
 
 			auto filterZ = samplerWords->WORD0.get_Z_FILTER();
 			// todo: z-filter for texture array samplers is customizable for GPU7 but OpenGL/Vulkan doesn't expose this functionality?

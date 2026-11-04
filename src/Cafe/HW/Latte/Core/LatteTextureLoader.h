@@ -528,14 +528,19 @@ public:
 			for (sint32 x = 0; x < textureLoader->width; x += textureLoader->stepX)
 			{
 				uint8* blockData = LatteTextureLoader_GetInput(textureLoader, x, y);
-				sint32 pixelOffset = (x + yc * textureLoader->width) * 1 * sizeof(uint32);
-				*(uint32*)(outputData + pixelOffset + 0) = 0;
+				sint32 pixelOffset = (x + yc * textureLoader->width) * sizeof(uint32);
+				*(uint32*)(outputData + pixelOffset) = *(uint32*)blockData;
 			}
 		}
 	}
 
 	void decodePixelToRGBA(uint8* blockData, uint8* outputPixel, uint8 blockOffsetX, uint8 blockOffsetY) override
 	{
+		uint32 packedValue = *(uint32*)blockData;
+		outputPixel[0] = (uint8)(packedValue & 0xFF);
+		outputPixel[1] = (uint8)((packedValue >> 8) & 0xFF);
+		outputPixel[2] = (uint8)((packedValue >> 16) & 0xFF);
+		outputPixel[3] = (uint8)((packedValue >> 24) & 0xFF);
 	}
 };
 
