@@ -336,6 +336,7 @@ struct LatteTextureLoadDiagnostics
 {
 	uint64 sliceLoadAttempts{};
 	uint64 decoderUnavailable{};
+	uint64 invalidInputAddress{};
 	uint64 invalidDecodedSize{};
 	uint64 decodeCalls{};
 	uint64 decodedBytes{};
@@ -353,6 +354,7 @@ enum class LatteTextureDiagnosticEventType : uint32
 	DecoderUnavailable = 1,
 	UploadBufferAllocationFailed = 2,
 	InvalidDecodedSize = 3,
+	InvalidInputAddress = 4,
 };
 
 struct LatteTextureDiagnosticEvent
