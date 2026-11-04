@@ -526,9 +526,24 @@ namespace NativeEmulation
         report.append("Capture source: Cemu native LogCallbacks (not Android-wide Logcat).\n");
         report.append("Persistent log: app-private vulkan-diagnostic.log with one rotated .previous segment.\n");
         report.append("Each active/previous segment is bounded to 32 MiB; export combines both when available.\n");
-        report.append("Vulkan validation requested: ");
-        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\n" : "no\n");
-        report.append("Check session entries for actual validation-layer and debug-messenger initialization status.\n\n");
+        report.append("Vulkan validation UI preference currently enabled: ");
+        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes (requested for next renderer initialization)\n" : "no\n");
+        const auto validation = VulkanRenderer_GetValidationDiagnostics();
+        report.append("Last Vulkan renderer initialization attempted: ");
+        report.append(validation.initializationAttempted ? "yes\n" : "no\n");
+        report.append("Validation layer status: ");
+        if (!validation.initializationAttempted)
+            report.append("unknown (renderer has not initialized in this process)\n");
+        else if (!validation.validationRequested)
+            report.append("not requested\n");
+        else
+            report.append(validation.validationLayerEnabled ? "loaded\n" : "not loaded\n");
+        report.append(fmt::format("VK_EXT_debug_utils available: {}\\n", validation.debugUtilsAvailable ? "yes" : "no"));
+        report.append(fmt::format("Vulkan debug messenger created: {}\\n", validation.debugMessengerCreated ? "yes" : "no"));
+        if (validation.validationRequested)
+            report.append(fmt::format("Debug messenger VkResult: {}\\n\\n", validation.debugMessengerResult));
+        else
+            report.append("\\n");
         AppendTextureCacheSnapshot(report);
         report.append(s_androidLogCapture.Snapshot());
         if (report.empty() || report.back() != '\n')
