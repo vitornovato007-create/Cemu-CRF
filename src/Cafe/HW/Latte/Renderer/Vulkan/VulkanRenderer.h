@@ -14,6 +14,19 @@
 #include "util/containers/robin_hood.h"
 #include "Cemu/GuiSystem/GuiSystem.h"
 
+struct VulkanValidationDiagnostics
+{
+	bool initializationAttempted{};
+	bool validationRequested{};
+	bool validationLayerEnabled{};
+	bool debugUtilsAvailable{};
+	bool debugMessengerCreated{};
+	sint32 debugMessengerResult{};
+};
+
+// Reports actual Vulkan validation initialization, not just the UI preference.
+VulkanValidationDiagnostics VulkanRenderer_GetValidationDiagnostics();
+
 struct VkSupportedFormatInfo_t
 {
 	bool fmt_d24_unorm_s8_uint{};
