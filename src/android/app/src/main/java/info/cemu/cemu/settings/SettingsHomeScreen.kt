@@ -34,7 +34,7 @@ data class SettingsHomeScreenActions(
 fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActions) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var validationEnabled by remember { mutableStateOf(NativeEmulation.isVulkanValidationEnabled()) }
+    var monitorEnabled by remember { mutableStateOf(NativeEmulation.isMonitorEnabled()) }
     val createLogDocument = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
@@ -42,7 +42,7 @@ fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActi
             scope.launch(Dispatchers.IO) {
                 try {
                     val report = buildString {
-                        append(NativeEmulation.getVulkanDiagnosticLog())
+                        append(NativeEmulation.getMonitorLog())
                         append("\n\nAndroid device: ${Build.MANUFACTURER} ${Build.MODEL}")
                         append("\nAndroid API level: ${Build.VERSION.SDK_INT}\n")
                     }
@@ -50,11 +50,11 @@ fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActi
                         ?: throw IllegalStateException("Unable to open the selected destination")
                     output.use { it.write(report.toByteArray(Charsets.UTF_8)) }
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Vulkan diagnostic log exported", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Monitor 2.0 report exported", Toast.LENGTH_LONG).show()
                     }
                 } catch (exception: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Failed to export Vulkan log: ${exception.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Failed to export Monitor 2.0 report: ${exception.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -85,21 +85,21 @@ fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActi
             onClick = dropUnlessResumed(block = actions.goToOverlaySettings)
         )
         Button(
-            label = if (validationEnabled) "Vulkan validation: ON (slower)" else "Enable Vulkan validation (slower)",
+            label = if (monitorEnabled) "Monitor 2.0: ON" else "Ativar Monitor 2.0",
             onClick = dropUnlessResumed {
-                validationEnabled = !validationEnabled
-                NativeEmulation.setVulkanValidationEnabled(validationEnabled)
+                monitorEnabled = !monitorEnabled
+                NativeEmulation.setMonitorEnabled(monitorEnabled)
                 Toast.makeText(
                     context,
-                    if (validationEnabled) "Vulkan validation enabled for the next game launch" else "Vulkan validation disabled",
+                    if (monitorEnabled) "Monitor 2.0 enabled" else "Monitor 2.0 disabled",
                     Toast.LENGTH_LONG
                 ).show()
             }
         )
         Button(
-            label = "Export Vulkan diagnostic log (.txt)",
+            label = "Exportar Monitor 2.0 (.txt)",
             onClick = dropUnlessResumed {
-                createLogDocument.launch("cemu-vulkan-diagnostic.txt")
+                createLogDocument.launch("cemu-monitor-2.0.txt")
             }
         )
     }
