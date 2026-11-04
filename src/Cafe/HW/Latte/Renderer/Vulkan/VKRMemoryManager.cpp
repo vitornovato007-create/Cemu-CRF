@@ -316,6 +316,7 @@ uint32 VkTextureChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumA
 	};
 	hostLocalMemoryTypeIndices.erase(std::remove_if(hostLocalMemoryTypeIndices.begin(), hostLocalMemoryTypeIndices.end(), pred), hostLocalMemoryTypeIndices.end());
 	// allocate chunk memory
+	VkResult lastAllocationResult = VK_ERROR_OUT_OF_DEVICE_MEMORY;
 	for (sint32 t = 0; t < 3; t++)
 	{
 		// attempt to allocate from device local memory first
@@ -328,6 +329,7 @@ uint32 VkTextureChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumA
 
 			VkDeviceMemory imageMemory;
 			VkResult r = vkAllocateMemory(VulkanRenderer::GetInstance()->GetLogicalDevice(), &allocInfo, nullptr, &imageMemory);
+			lastAllocationResult = r;
 			if (r != VK_SUCCESS)
 				continue;
 			m_list_chunkInfo[chunkIndex].mem = imageMemory;
@@ -345,6 +347,7 @@ uint32 VkTextureChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumA
 
 			VkDeviceMemory imageMemory;
 			VkResult r = vkAllocateMemory(VulkanRenderer::GetInstance()->GetLogicalDevice(), &allocInfo, nullptr, &imageMemory);
+			lastAllocationResult = r;
 			if (r != VK_SUCCESS)
 				continue;
 			m_list_chunkInfo[chunkIndex].mem = imageMemory;
@@ -358,8 +361,9 @@ uint32 VkTextureChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumA
 			break;
 		cemuLog_log(LogType::Force, "Failed to allocate texture memory chunk with size {}MB. Trying again with smaller allocation size", allocationSize / 1024 / 1024);
 	}
-	cemuLog_log(LogType::Force, "Unable to allocate image memory chunk ({} heaps)", deviceLocalMemoryTypeIndices.size());
-	throw std::runtime_error("failed to allocate image memory!");
+	s_vkImageAllocationFailures.fetch_add(1, std::memory_order_relaxed);
+	cemuLog_log(LogType::Force, "Unable to allocate Vulkan texture memory chunk: VkResult={}, requested={} bytes, device-local memory types={}, host-local memory types={}", (sint32)lastAllocationResult, allocationSize, deviceLocalMemoryTypeIndices.size(), hostLocalMemoryTypeIndices.size());
+	throw std::runtime_error(fmt::format("failed to allocate image memory: VkResult={}", (sint32)lastAllocationResult));
 	return 0;
 }
 
