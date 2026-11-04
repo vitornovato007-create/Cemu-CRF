@@ -460,10 +460,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	VulkanRenderer* vkr = (VulkanRenderer*)g_renderer.get();
 
 	EShMessages messagesPreprocess;
-	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
-		messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo);
-	else
-		messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
+	messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
 
 	glslang::TShader::ForbidIncluder Includer;
 	if (!Shader.preprocess(&Resources, 450, ENoProfile, false, false, messagesPreprocess, &PreprocessedGLSL, Includer))
@@ -476,10 +473,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	}
 
 	EShMessages messagesParseLink;
-	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
-		messagesParseLink = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo);
-	else
-		messagesParseLink = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
+	messagesParseLink = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
 
 	const char* PreprocessedCStr = PreprocessedGLSL.c_str();
 	Shader.setStrings(&PreprocessedCStr, 1);
@@ -522,7 +516,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 
 	glslang::SpvOptions spvOptions;
 	spvOptions.disableOptimizer = false;
-	spvOptions.generateDebugInfo = (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT);
+	spvOptions.generateDebugInfo = false;
 	spvOptions.validate = false;
 	spvOptions.optimizeSize = true;
 
@@ -587,13 +581,13 @@ void RendererShaderVk::PreponeCompilation(bool isRenderThread)
 
 bool RendererShaderVk::IsCompiled()
 {
-	return m_compilationState.hasState(COMPILATION_STATE::DONE);
+	return m_compilationState.hasState(COMPILATION_STATE::DONE) && m_shader_module != VK_NULL_HANDLE;
 };
 
 bool RendererShaderVk::WaitForCompiled()
 {
 	m_compilationState.waitUntilValue(COMPILATION_STATE::DONE);
-	return true;
+	return m_shader_module != VK_NULL_HANDLE;
 }
 
 void RendererShaderVk::ShaderCacheLoading_begin(uint64 cacheTitleId)
