@@ -50,11 +50,11 @@ fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActi
                         ?: throw IllegalStateException("Unable to open the selected destination")
                     output.use { it.write(report.toByteArray(Charsets.UTF_8)) }
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Monitor 2.0 report exported", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Relatório do Monitor 2.0 exportado", Toast.LENGTH_LONG).show()
                     }
                 } catch (exception: Exception) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Failed to export Monitor 2.0 report: ${exception.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Falha ao exportar o relatório do Monitor 2.0: ${exception.message ?: "erro desconhecido"}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -85,13 +85,13 @@ fun SettingsHomeScreen(navigateBack: () -> Unit, actions: SettingsHomeScreenActi
             onClick = dropUnlessResumed(block = actions.goToOverlaySettings)
         )
         Button(
-            label = if (monitorEnabled) "Monitor 2.0: ON" else "Ativar Monitor 2.0",
+            label = if (monitorEnabled) "Monitor 2.0: ATIVO" else "Ativar Monitor 2.0",
             onClick = dropUnlessResumed {
                 monitorEnabled = !monitorEnabled
                 NativeEmulation.setMonitorEnabled(monitorEnabled)
                 Toast.makeText(
                     context,
-                    if (monitorEnabled) "Monitor 2.0 enabled" else "Monitor 2.0 disabled",
+                    if (monitorEnabled) "Monitor 2.0 ativado" else "Monitor 2.0 desativado",
                     Toast.LENGTH_LONG
                 ).show()
             }
