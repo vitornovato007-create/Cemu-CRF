@@ -979,6 +979,16 @@ LatteTextureView* LatteTexture_CreateMapping(MPTR physAddr, MPTR physMipAddr, si
 		cemuLog_logDebug(LogType::Force, "LatteTexture_CreateMapping(): Invalid format");
 		return nullptr;
 	}
+	// Monitor 2.0: preserve the exact origin of the known GX2 0x001a
+	// color-format/depth-flag mismatch without changing texture semantics.
+	if (isDepth && static_cast<uint32>(format) == 0x001a)
+	{
+		cemuLog_log(LogType::Force,
+			"[Monitor 2.0] Unexpected depth classification: physAddr=0x{:08x} format=0x{:04x} isDepth={} dim={} size={}x{}x{} pitch={} tileMode={} caller={}",
+			(uint32)physAddr, (uint32)format, isDepth, (uint32)dimBase,
+			width, height, depth, pitch, (uint32)tileMode,
+			(void*)__builtin_return_address(0));
+	}
 	// note: When creating an existing texture, we only allow mip and slice expansion at the end
 	cemu_assert_debug(depth);
 	
