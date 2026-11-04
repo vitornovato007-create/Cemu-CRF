@@ -6,8 +6,10 @@
 
 VKRSynchronizedRingAllocator::~VKRSynchronizedRingAllocator()
 {
-	for(auto& buf : m_buffers)
+	for (auto& buf : m_buffers)
 	{
+		if (buf.basePtr != nullptr && buf.vk_mem != VK_NULL_HANDLE)
+			vkUnmapMemory(m_vkr->GetLogicalDevice(), buf.vk_mem);
 		m_vkrMemMgr->DeleteBuffer(buf.vk_buffer, buf.vk_mem);
 	}
 }
@@ -31,17 +33,33 @@ void VKRSynchronizedRingAllocator::allocateAdditionalUploadBuffer(uint32 sizeReq
 	AllocatorBuffer_t newBuffer{};
 	newBuffer.writeIndex = 0;
 	newBuffer.basePtr = nullptr;
+	bool created = false;
 	if (m_bufferType == VKR_BUFFER_TYPE::STAGING)
-		m_vkrMemMgr->CreateBuffer(bufferAllocSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, newBuffer.vk_buffer, newBuffer.vk_mem);
+		created = m_vkrMemMgr->CreateBuffer(bufferAllocSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, newBuffer.vk_buffer, newBuffer.vk_mem);
 	else if (m_bufferType == VKR_BUFFER_TYPE::INDEX)
-		m_vkrMemMgr->CreateBuffer(bufferAllocSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, newBuffer.vk_buffer, newBuffer.vk_mem);
+		created = m_vkrMemMgr->CreateBuffer(bufferAllocSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, newBuffer.vk_buffer, newBuffer.vk_mem);
 	else if (m_bufferType == VKR_BUFFER_TYPE::STRIDE)
-		m_vkrMemMgr->CreateBuffer(bufferAllocSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, newBuffer.vk_buffer, newBuffer.vk_mem);
+		created = m_vkrMemMgr->CreateBuffer(bufferAllocSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, newBuffer.vk_buffer, newBuffer.vk_mem);
 	else
 		cemu_assert_debug(false);
 
+	if (!created)
+	{
+		cemuLog_log(LogType::Force, "Vulkan: failed to create synchronized upload buffer (type {}, size {} bytes)",
+			(sint32)m_bufferType, bufferAllocSize);
+		throw std::runtime_error("Failed to create synchronized Vulkan upload buffer");
+	}
+
 	void* bufferPtr = nullptr;
-	vkMapMemory(m_vkr->GetLogicalDevice(), newBuffer.vk_mem, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
+	VkResult mapResult = vkMapMemory(m_vkr->GetLogicalDevice(), newBuffer.vk_mem, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
+	if (mapResult != VK_SUCCESS || bufferPtr == nullptr)
+	{
+		cemuLog_log(LogType::Force, "Vulkan: vkMapMemory failed for synchronized upload buffer (VkResult {}, type {}, size {} bytes)",
+			(sint32)mapResult, (sint32)m_bufferType, bufferAllocSize);
+		m_vkrMemMgr->DeleteBuffer(newBuffer.vk_buffer, newBuffer.vk_mem);
+		throw std::runtime_error("Failed to map synchronized Vulkan upload buffer");
+	}
+
 	newBuffer.basePtr = (uint8*)bufferPtr;
 	newBuffer.size = bufferAllocSize;
 	newBuffer.index = (uint32)m_buffers.size();
