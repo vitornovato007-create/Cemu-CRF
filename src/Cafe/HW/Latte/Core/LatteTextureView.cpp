@@ -2,6 +2,7 @@
 #include "Cafe/HW/Latte/Core/LatteTextureView.h"
 #include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/GraphicPack/GraphicPack2.h"
+#include <atomic>
 
 LatteTextureView::LatteTextureView(LatteTexture* texture, sint32 firstMip, sint32 mipCount, sint32 firstSlice, sint32 sliceCount, Latte::E_DIM dim, Latte::E_GX2SURFFMT format, bool registerView)
 {
@@ -114,6 +115,26 @@ inline uint32 _getViewBucketKeyNoRes(MPTR physAddress, uint32 pitch)
 LatteTexViewBucket texViewBucket[TEXTURE_VIEW_BUCKETS] = { };
 LatteTexViewBucket texViewBucket_nores[TEXTURE_VIEW_BUCKETS] = { };
 
+namespace
+{
+	std::atomic<uint64> s_viewLookupAttempts{ 0 };
+	std::atomic<uint64> s_viewLookupHits{ 0 };
+	std::atomic<uint64> s_viewLookupMisses{ 0 };
+	std::atomic<uint64> s_viewTileModeMismatchCandidates{ 0 };
+	std::atomic<uint64> s_viewDepthTypeMismatchCandidates{ 0 };
+}
+
+LatteTextureViewCacheDiagnostics LatteTextureViewLookupCache_GetDiagnostics()
+{
+	LatteTextureViewCacheDiagnostics result;
+	result.lookupAttempts = s_viewLookupAttempts.load(std::memory_order_relaxed);
+	result.lookupHits = s_viewLookupHits.load(std::memory_order_relaxed);
+	result.lookupMisses = s_viewLookupMisses.load(std::memory_order_relaxed);
+	result.tileModeMismatchCandidates = s_viewTileModeMismatchCandidates.load(std::memory_order_relaxed);
+	result.depthTypeMismatchCandidates = s_viewDepthTypeMismatchCandidates.load(std::memory_order_relaxed);
+	return result;
+}
+
 void LatteTextureViewLookupCache::Add(LatteTextureView* view, uint32 baseMip, uint32 baseSlice)
 {
 	LatteTexViewLookupDesc desc(view);
@@ -146,88 +167,128 @@ void LatteTextureViewLookupCache::RemoveAll(LatteTextureView* view)
 }
 
 LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, Latte::E_HWTILEMODE tileMode)
-{
+{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
+		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.firstMip == firstMip && it.numMip == numMip && it.firstSlice == firstSlice && it.numSlice == numSlice)
+		{
+			if (it.tileMode != tileMode)
+				s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+			else if (it.isDepth)
+				s_viewDepthTypeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		}
 		if (it.format == format && it.dim == dim && it.tileMode == tileMode && !it.isDepth &&
 			it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
 			&& it.firstMip == firstMip && it.numMip == numMip
 			&& it.firstSlice == firstSlice && it.numSlice == numSlice
 			)
 		{
+			s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 			return it.view;
 		}
 	}
+	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
 	return nullptr;
 }
 
 LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, bool isDepth, Latte::E_HWTILEMODE tileMode)
-{
+{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+
 	cemu_assert_debug(firstSlice == 0);
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
+		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.firstMip == firstMip && it.numMip == numMip && it.firstSlice == firstSlice && it.numSlice == numSlice && it.tileMode != tileMode)
+			s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
 		if (it.format == format && it.dim == dim && it.tileMode == tileMode && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
 			&& it.firstMip == firstMip && it.numMip == numMip
 			&& it.firstSlice == firstSlice && it.numSlice == numSlice &&
 			it.isDepth == isDepth
 			)
 		{
+			s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 			return it.view;
 		}
 	}
+	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
 	return nullptr;
 }
 
 // look up view with unspecified mipCount and sliceCount
 LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, Latte::E_HWTILEMODE tileMode)
-{
+{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
+		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		{
+			if (it.tileMode != tileMode)
+				s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+			else if (it.isDepth)
+				s_viewDepthTypeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		}
 		if (!it.isDepth && it.tileMode == tileMode && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
+				s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 				return it.view;
 		}
 	}
+	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
 	return nullptr;
 }
 
 // look up view with unspecified mipCount/sliceCount and only minimum width and height given
 LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr, sint32 minWidth, sint32 minHeight, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, Latte::E_HWTILEMODE tileMode)
-{
+{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+
 	uint32 key = _getViewBucketKeyNoRes(physAddr, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket_nores[key].list)
 	{
+		if (it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		{
+			if (it.tileMode != tileMode)
+				s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+			else if (it.isDepth)
+				s_viewDepthTypeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		}
 		if (!it.isDepth && it.tileMode == tileMode && it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
+				s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 				return it.view;
 		}
 	}
+	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
 	return nullptr;
 }
 
 // similar to lookupSlice but also compares isDepth
 LatteTextureView* LatteTextureViewLookupCache::lookupSliceEx(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, bool isDepth, Latte::E_HWTILEMODE tileMode)
-{
+{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+
 	cemu_assert_debug(firstMip == 0);
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
+		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth && it.tileMode != tileMode)
+			s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
 		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth && it.tileMode == tileMode)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
+				s_viewLookupHits.fetch_add(1, std::memory_order_relaxed);
 				return it.view;
 		}
 	}
+	s_viewLookupMisses.fetch_add(1, std::memory_order_relaxed);
 	return nullptr;
 }
 
