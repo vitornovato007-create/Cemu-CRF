@@ -510,7 +510,9 @@ void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, Latt
 			flushedRange.memory = m_uniformVarBufferMemory;
 			flushedRange.offset = uniformOffset;
 			flushedRange.size = uniformSize;
-			vkFlushMappedMemoryRanges(m_logicalDevice, 1, &flushedRange);
+			const VkResult flushResult = vkFlushMappedMemoryRanges(m_logicalDevice, 1, &flushedRange);
+			if (flushResult != VK_SUCCESS)
+				cemuLog_log(LogType::Force, "Vulkan uniform ring-buffer flush failed: VkResult={}, stage={}, offset={}, bytes={}, atomSize={}", (sint32)flushResult, shaderStageIndex, uniformOffset, uniformSize, m_featureControl.limits.nonCoherentAtomSize);
 		}
 	}
 }
@@ -641,10 +643,12 @@ VkDescriptorSetInfo* VulkanRenderer::draw_getOrCreateDescriptorSet(PipelineInfo*
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &descriptor_set_layout;
 
-	VkDescriptorSet result;
-	if (vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &result) != VK_SUCCESS)
+	VkDescriptorSet result = VK_NULL_HANDLE;
+	const VkResult descriptorResult = vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &result);
+	if (descriptorResult != VK_SUCCESS)
 	{
-		UnrecoverableError(fmt::format("Failed to allocate descriptor sets. Currently allocated: Descriptors={} TextureSamplers={} DynUniformBuffers={} StorageBuffers={}",
+		UnrecoverableError(fmt::format("vkAllocateDescriptorSets failed: VkResult={}, descriptorPool={}, layout={}, allocated: Descriptors={} TextureSamplers={} DynUniformBuffers={} StorageBuffers={}",
+			(sint32)descriptorResult, (void*)allocInfo.descriptorPool, (void*)descriptor_set_layout,
 			performanceMonitor.vk.numDescriptorSets.get(),
 			performanceMonitor.vk.numDescriptorSamplerTextures.get(),
 			performanceMonitor.vk.numDescriptorDynUniformBuffers.get(),
