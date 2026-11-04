@@ -624,7 +624,8 @@ VulkanRenderer::VulkanRenderer()
 	m_uniformVarBufferPtr = (uint8*)mapBufferOrThrow(m_uniformVarBufferMemory, "uniform ring buffer");
 
 	// texture readback buffer
-	if (!memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory) &&
+	m_textureReadbackBufferMemoryIsCoherent = memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory);
+	if (!m_textureReadbackBufferMemoryIsCoherent &&
 		!memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory))
 		throw std::runtime_error("Unable to allocate Vulkan texture readback buffer");
 	m_textureReadbackBufferPtr = (uint8*)mapBufferOrThrow(m_textureReadbackBufferMemory, "texture readback buffer");
@@ -635,7 +636,8 @@ VulkanRenderer::VulkanRenderer()
 		throw std::runtime_error("Unable to allocate Vulkan transform-feedback ring buffer");
 
 	// occlusion query result buffer
-	if (!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults) &&
+	m_occlusionQueries.queryResultsMemoryIsCoherent = memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults);
+	if (!m_occlusionQueries.queryResultsMemoryIsCoherent &&
 		!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults))
 		throw std::runtime_error("Unable to allocate Vulkan occlusion query result buffer");
 	m_occlusionQueries.ptrQueryResults = (uint64*)mapBufferOrThrow(m_occlusionQueries.memoryQueryResults, "occlusion query result buffer");
@@ -3759,32 +3761,27 @@ void VulkanRenderer::texture_copyImageSubData(LatteTexture* src, sint32 srcMip, 
 
 LatteTextureReadbackInfo* VulkanRenderer::texture_createReadback(LatteTextureView* textureView)
 {
-	auto* result = new LatteTextureReadbackInfoVk(m_logicalDevice, textureView);
-
-	LatteTextureVk* vkTex = (LatteTextureVk*)textureView->baseTexture;
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(m_logicalDevice, vkTex->GetImageObj()->m_image, &memRequirements);
-
-	const uint32 linearImageSize = result->GetImageSize();
-	if (memRequirements.size > std::numeric_limits<uint32>::max())
-		throw std::runtime_error(fmt::format("Texture readback allocation exceeds 32-bit buffer limits: bytes={}", memRequirements.size));
-	const uint32 uploadSize = (linearImageSize == 0) ? (uint32)memRequirements.size : linearImageSize;
+	const uint32 uploadSize = LatteTextureReadbackInfoVk::GetImageSize(textureView);
 	const uint32 uploadAlignment = std::max<uint32>(256, GetNonCoherentAtomSize());
-	if (uploadAlignment >= TEXTURE_READBACK_SIZE || uploadSize == 0 || uploadSize > TEXTURE_READBACK_SIZE - uploadAlignment)
-		throw std::runtime_error(fmt::format("Texture readback does not fit the shared buffer: bytes={}, capacity={}", uploadSize, TEXTURE_READBACK_SIZE));
-	m_textureReadbackBufferWriteIndex = (m_textureReadbackBufferWriteIndex + uploadAlignment - 1) & ~(uploadAlignment - 1);
-
-	if ((uint64)m_textureReadbackBufferWriteIndex + uploadSize + uploadAlignment > TEXTURE_READBACK_SIZE)
+	if (uploadSize == 0)
 	{
-		m_textureReadbackBufferWriteIndex = 0;
+		cemuLog_log(LogType::Force, "Texture readback rejected: unsupported or invalid linear transfer size (format={:04x}, resolution={}x{})",
+			(uint32)textureView->format, textureView->baseTexture->width, textureView->baseTexture->height);
+		return nullptr;
 	}
-
+	if (uploadAlignment >= TEXTURE_READBACK_SIZE || uploadSize > TEXTURE_READBACK_SIZE - uploadAlignment)
+	{
+		cemuLog_log(LogType::Force, "Texture readback rejected: transfer exceeds shared buffer capacity (bytes={}, capacity={})", uploadSize, TEXTURE_READBACK_SIZE);
+		return nullptr;
+	}
+	auto* result = new LatteTextureReadbackInfoVk(m_logicalDevice, textureView);
+	m_textureReadbackBufferWriteIndex = (m_textureReadbackBufferWriteIndex + uploadAlignment - 1) & ~(uploadAlignment - 1);
+	if ((uint64)m_textureReadbackBufferWriteIndex + uploadSize + uploadAlignment > TEXTURE_READBACK_SIZE)
+		m_textureReadbackBufferWriteIndex = 0;
 	const uint32 uploadBufferOffset = m_textureReadbackBufferWriteIndex;
 	m_textureReadbackBufferWriteIndex += uploadSize;
-
-	result->SetBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory, m_textureReadbackBufferPtr, uploadBufferOffset, uploadSize, TEXTURE_READBACK_SIZE);
-
+	result->SetBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory, m_textureReadbackBufferPtr,
+		uploadBufferOffset, uploadSize, TEXTURE_READBACK_SIZE, m_textureReadbackBufferMemoryIsCoherent);
 	return result;
 }
 
