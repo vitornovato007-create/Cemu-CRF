@@ -34,6 +34,17 @@ public:
 	std::vector<uint32> viewLookUpCacheKeysNoRes;
 };
 
+struct LatteTextureViewCacheDiagnostics
+{
+	uint64 lookupAttempts{};
+	uint64 lookupHits{};
+	uint64 lookupMisses{};
+	uint64 tileModeMismatchCandidates{};
+	uint64 depthTypeMismatchCandidates{};
+};
+
+LatteTextureViewCacheDiagnostics LatteTextureViewLookupCache_GetDiagnostics();
+
 class LatteTextureViewLookupCache
 {
 public:
