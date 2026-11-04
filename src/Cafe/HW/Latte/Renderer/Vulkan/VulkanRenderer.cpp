@@ -3436,9 +3436,10 @@ VkDescriptorSet VulkanRenderer::backbufferBlit_createDescriptorSet(VkDescriptorS
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &descriptor_set_layout;
 
-	VkDescriptorSet result;
-	if (vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &result) != VK_SUCCESS)
-		UnrecoverableError("Failed to allocate descriptor sets for backbuffer blit");
+	VkDescriptorSet result = VK_NULL_HANDLE;
+	const VkResult descriptorResult = vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &result);
+	if (descriptorResult != VK_SUCCESS)
+		UnrecoverableError(fmt::format("Backbuffer-blit vkAllocateDescriptorSets failed: VkResult={}, pool={}, layout={}", (sint32)descriptorResult, (void*)allocInfo.descriptorPool, (void*)descriptor_set_layout).c_str());
 	performanceMonitor.vk.numDescriptorSets.increment();
 
 	VkDescriptorImageInfo imageInfo = {};
@@ -4253,8 +4254,9 @@ std::unordered_map<uint64, VKRObjectSampler*> VKRObjectSampler::s_samplerCache;
 VKRObjectSampler::VKRObjectSampler(VkSamplerCreateInfo* samplerInfo)
 {
 	auto* vulkanRenderer = VulkanRenderer::GetInstance();
-	if (vkCreateSampler(vulkanRenderer->GetLogicalDevice(), samplerInfo, nullptr, &m_sampler) != VK_SUCCESS)
-		vulkanRenderer->UnrecoverableError("Failed to create texture sampler");
+	const VkResult samplerResult = vkCreateSampler(vulkanRenderer->GetLogicalDevice(), samplerInfo, nullptr, &m_sampler);
+	if (samplerResult != VK_SUCCESS)
+		vulkanRenderer->UnrecoverableError(fmt::format("vkCreateSampler(texture) failed: VkResult={}, minFilter={}, magFilter={}, mipMode={}, addressMode={}", (sint32)samplerResult, (sint32)samplerInfo->minFilter, (sint32)samplerInfo->magFilter, (sint32)samplerInfo->mipmapMode, (sint32)samplerInfo->addressModeU).c_str());
 	performanceMonitor.vk.numSamplers.increment();
 	m_hash = CalcHashSamplerCreateInfo(*samplerInfo);
 }
@@ -4409,10 +4411,11 @@ VKRObjectRenderPass::VKRObjectRenderPass(AttachmentInfo_t& attachmentInfo, sint3
 	// before Cemu 1.25.5 we used zero here, which means implicit synchronization. For 1.25.5 it was changed to 2 (using the subpass dependencies above)
 	// Reverted this again to zero for Cemu 1.25.5b as the performance cost is just too high. Manual synchronization is preferred
 
-	if (vkCreateRenderPass(VulkanRenderer::GetInstance()->GetLogicalDevice(), &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS)
+	const VkResult renderPassResult = vkCreateRenderPass(VulkanRenderer::GetInstance()->GetLogicalDevice(), &renderPassInfo, nullptr, &m_renderPass);
+	if (renderPassResult != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Vulkan-Error: Failed to create render pass");
-		throw std::runtime_error("failed to create render pass!");
+		cemuLog_log(LogType::Force, "Vulkan vkCreateRenderPass failed: VkResult={}, attachments={}, subpasses={}", (sint32)renderPassResult, renderPassInfo.attachmentCount, renderPassInfo.subpassCount);
+		throw std::runtime_error(fmt::format("Failed to create Vulkan render pass: VkResult={}", (sint32)renderPassResult));
 	}
 
 	// track references
