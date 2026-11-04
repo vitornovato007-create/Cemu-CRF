@@ -2,6 +2,7 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include <imgui.h>
 #include <atomic>
+#include <limits>
 
 namespace
 {
