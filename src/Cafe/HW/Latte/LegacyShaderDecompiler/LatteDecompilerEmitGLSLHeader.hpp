@@ -531,18 +531,26 @@ namespace LatteDecompiler
 			{
 				// pixel shader with geometry shader
 				LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
-				std::array<bool, 128> emittedG2PImports{};
+				std::array<sint32, 128> emittedG2PImports{};
+				emittedG2PImports.fill(-1);
 				for (sint32 i = 0; i < psInputTable->count; i++)
 				{
-					if (psInputTable->import[i].semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
+					const uint32 semanticId = psInputTable->import[i].semanticId;
+					if (semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
 						continue;
-					uint32 location = psInputTable->import[i].semanticId & 0x7F;
-					if (emittedG2PImports[location])
+					uint32 location = semanticId & 0x7F;
+					if (emittedG2PImports[location] >= 0)
 					{
-						cemuLog_log(LogType::Force, "Geometry shader {:016x} has duplicate pixel import semantic {}; emitting one GLSL interface declaration", decompilerContext->shaderBaseHash, location);
-						continue;
+						if ((uint32)emittedG2PImports[location] != semanticId)
+						{
+						cemuLog_log(LogType::Force, "Geometry shader {:016x} has colliding pixel import semantics {} and {} at masked location {}; refusing ambiguous GLSL interface mapping", decompilerContext->shaderBaseHash, emittedG2PImports[location], semanticId, location);
+						decompilerContext->shader->hasError = true;
 					}
-					emittedG2PImports[location] = true;
+					else
+						cemuLog_log(LogType::Force, "Geometry shader {:016x} repeats pixel import semantic {}; emitting one GLSL interface declaration", decompilerContext->shaderBaseHash, semanticId);
+					continue;
+					}
+					emittedG2PImports[location] = (sint32)semanticId;
 
 					src->addFmt("layout(location = {}) ", location);
 					if (psInputTable->import[i].isFlat)
