@@ -115,9 +115,12 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::D24_S8_UNORM)
 	{
-		cemu_assert(textureFormat == VK_FORMAT_D24_UNORM_S8_UINT);
-		// todo - if driver does not support VK_FORMAT_D24_UNORM_S8_UINT this is represented as VK_FORMAT_D32_SFLOAT_S8_UINT which is 8 bytes
-		return checkedLinearSize(4);
+		if (textureFormat == VK_FORMAT_D24_UNORM_S8_UINT)
+			return checkedLinearSize(4);
+		if (textureFormat == VK_FORMAT_D32_SFLOAT_S8_UINT)
+			return checkedLinearSize(8);
+		cemuLog_log(LogType::Force, "Texture readback depth/stencil format mismatch: GX2=D24_S8_UNORM, VkFormat={}", (sint32)textureFormat);
+		return 0;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R5_G6_B5_UNORM )
 	{
@@ -128,8 +131,7 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 	}
 	else
 	{
-		cemuLog_log(LogType::Force, "Unsupported texture readback format {:04x}", (uint32)textureView->format);
-		cemu_assert_debug(false);
+		cemuLog_log(LogType::Force, "Unsupported texture readback format {:04x}; skipping readback", (uint32)textureView->format);
 		return 0;
 	}
 }
