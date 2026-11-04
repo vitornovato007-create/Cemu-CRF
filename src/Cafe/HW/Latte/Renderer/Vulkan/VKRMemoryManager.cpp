@@ -1,6 +1,18 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VKRMemoryManager.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include <imgui.h>
+#include <atomic>
+
+namespace
+{
+	std::atomic<uint64> s_vkBufferCreateAttempts{ 0 };
+	std::atomic<uint64> s_vkBufferCreateSuccesses{ 0 };
+	std::atomic<uint64> s_vkBufferCreateFailures{ 0 };
+	std::atomic<uint64> s_vkImageAllocationAttempts{ 0 };
+	std::atomic<uint64> s_vkImageAllocationSuccesses{ 0 };
+	std::atomic<uint64> s_vkImageAllocationFailures{ 0 };
+	std::atomic<uint64> s_vkImageAllocationBytes{ 0 };
+}
 
 /* VKRSynchronizedMemoryBuffer */
 
@@ -478,6 +490,8 @@ size_t VKRMemoryManager::GetTotalMemoryForBufferType(VkBufferUsageFlags usage, V
 
 bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
+	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
+	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return recordFailure(); };
 	buffer = VK_NULL_HANDLE;
 	bufferMemory = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo{};
@@ -488,7 +502,7 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 	if (vkCreateBuffer(m_vkr->GetLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 	{
 		cemuLog_log(LogType::Force, "Failed to create buffer (CreateBuffer)");
-		return false;
+		return recordFailure();
 	}
 
 	VkMemoryRequirements memRequirements;
@@ -500,12 +514,12 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 	if (!FindMemoryType(memRequirements.memoryTypeBits, properties, allocInfo.memoryTypeIndex))
 	{
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
-		return false;
+		return recordFailure();
 	}
 	if (vkAllocateMemory(m_vkr->GetLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 	{
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
-		return false;
+		return recordFailure();
 	}
 	VkResult bindResult = vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0);
 	if (bindResult != VK_SUCCESS)
@@ -515,13 +529,16 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 		buffer = VK_NULL_HANDLE;
 		bufferMemory = VK_NULL_HANDLE;
 		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBuffer): VkResult {}", (sint32)bindResult);
-		return false;
+		return recordFailure();
 	}
+	s_vkBufferCreateSuccesses.fetch_add(1, std::memory_order_relaxed);
 	return true;
 }
 
 bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
+	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
+	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return recordFailure(); };
 	buffer = VK_NULL_HANDLE;
 	bufferMemory = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo{};
@@ -539,7 +556,7 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 	if (vkCreateBuffer(m_vkr->GetLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 	{
 		cemuLog_log(LogType::Force, "Failed to create buffer (CreateBuffer)");
-		return false;
+		return recordFailure();
 	}
 
 	VkMemoryRequirements memRequirements;
@@ -562,12 +579,12 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 	if (!FindMemoryType(memRequirements.memoryTypeBits, properties, allocInfo.memoryTypeIndex))
 	{
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
-		return false;
+		return recordFailure();
 	}
 	if (vkAllocateMemory(m_vkr->GetLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 	{
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
-		return false;
+		return recordFailure();
 	}
 	VkResult bindResult = vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0);
 	if (bindResult != VK_SUCCESS)
@@ -577,8 +594,9 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 		buffer = VK_NULL_HANDLE;
 		bufferMemory = VK_NULL_HANDLE;
 		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBufferFromHostMemory): VkResult {}", (sint32)bindResult);
-		return false;
+		return recordFailure();
 	}
+	s_vkBufferCreateSuccesses.fetch_add(1, std::memory_order_relaxed);
 	return true;
 }
 
@@ -594,6 +612,7 @@ void VKRMemoryManager::DeleteBuffer(VkBuffer& buffer, VkDeviceMemory& deviceMem)
 
 VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 {
+	s_vkImageAllocationAttempts.fetch_add(1, std::memory_order_relaxed);
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(m_vkr->GetLogicalDevice(), image, &memRequirements);
 	uint32 typeFilter = memRequirements.memoryTypeBits;
@@ -633,6 +652,8 @@ VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 		}
 		if (!mem.isValid())
 		{
+			s_vkImageAllocationFailures.fetch_add(1, std::memory_order_relaxed);
+			cemuLog_log(LogType::Force, "Vulkan image allocation failed: requested={} bytes, alignment={}, memoryTypeBits={:#x}", allocationSize, memRequirements.alignment, typeFilter);
 			m_vkr->UnrecoverableError("Ran out of VRAM for textures");
 		}
 	}
@@ -640,6 +661,7 @@ VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 	VkResult bindResult = vkBindImageMemory(m_vkr->GetLogicalDevice(), image, texHeap->getChunkMem(mem.chunkIndex), mem.offset);
 	if (bindResult != VK_SUCCESS)
 	{
+		s_vkImageAllocationFailures.fetch_add(1, std::memory_order_relaxed);
 		texHeap->freeMem(mem);
 		cemuLog_log(LogType::Force,
 			"Vulkan: vkBindImageMemory failed (VkResult {}, image {}, allocation {} bytes, memory type bits {:#x})",
@@ -648,6 +670,8 @@ VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 		return nullptr;
 	}
 
+	s_vkImageAllocationSuccesses.fetch_add(1, std::memory_order_relaxed);
+	s_vkImageAllocationBytes.fetch_add(allocationSize, std::memory_order_relaxed);
 	return new VkImageMemAllocation(typeFilter, mem, allocationSize);
 }
 
@@ -661,6 +685,40 @@ void VKRMemoryManager::imageMemoryFree(VkImageMemAllocation* imageMemAllocation)
 	}
 	heapItr->second->freeMem(imageMemAllocation->mem);
 	delete imageMemAllocation;
+}
+
+VulkanMemoryDiagnostics VKRMemoryManager::GetDiagnostics() const
+{
+	VulkanMemoryDiagnostics result;
+	for (const auto& heap : map_textureHeap)
+	{
+		uint32 heapSize = 0;
+		uint32 allocatedBytes = 0;
+		heap.second->getStatistics(heapSize, allocatedBytes);
+		result.textureHeapBytes += heapSize;
+		result.textureAllocatedBytes += allocatedBytes;
+		++result.textureHeapCount;
+	}
+	uint32 bufferCount = 0;
+	size_t totalBytes = 0;
+	size_t freeBytes = 0;
+	m_stagingBuffer.GetStats(bufferCount, totalBytes, freeBytes);
+	result.stagingBufferBytes = totalBytes;
+	result.stagingBufferFreeBytes = freeBytes;
+	m_indexBuffer.GetStats(bufferCount, totalBytes, freeBytes);
+	result.indexBufferBytes = totalBytes;
+	result.indexBufferFreeBytes = freeBytes;
+	m_vertexStrideMetalBuffer.GetStats(bufferCount, totalBytes, freeBytes);
+	result.strideBufferBytes = totalBytes;
+	result.strideBufferFreeBytes = freeBytes;
+	result.bufferCreateAttempts = s_vkBufferCreateAttempts.load(std::memory_order_relaxed);
+	result.bufferCreateSuccesses = s_vkBufferCreateSuccesses.load(std::memory_order_relaxed);
+	result.bufferCreateFailures = s_vkBufferCreateFailures.load(std::memory_order_relaxed);
+	result.imageAllocationAttempts = s_vkImageAllocationAttempts.load(std::memory_order_relaxed);
+	result.imageAllocationSuccesses = s_vkImageAllocationSuccesses.load(std::memory_order_relaxed);
+	result.imageAllocationFailures = s_vkImageAllocationFailures.load(std::memory_order_relaxed);
+	result.imageAllocationBytes = s_vkImageAllocationBytes.load(std::memory_order_relaxed);
+	return result;
 }
 
 void VKRMemoryManager::appendOverlayHeapDebugInfo()
