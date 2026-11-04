@@ -72,7 +72,7 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 	else if (textureView->format == Latte::E_GX2SURFFMT::R32_G32_B32_A32_FLOAT)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R32G32B32A32_SFLOAT);
-		return checkedLinearSize(1)6;
+		return checkedLinearSize(16);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R32_FLOAT)
 	{
