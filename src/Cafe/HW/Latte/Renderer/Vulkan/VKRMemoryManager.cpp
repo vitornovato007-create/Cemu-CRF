@@ -86,9 +86,13 @@ void VKRSynchronizedRingAllocator::allocateAdditionalUploadBuffer(uint32 sizeReq
 
 VKRSynchronizedRingAllocator::AllocatorReservation_t VKRSynchronizedRingAllocator::AllocateBufferMemory(uint32 size, uint32 alignment)
 {
-	if (alignment < 128)
-		alignment = 128;
-	size = (size + 127) & ~127;
+	const uint32 atomSize = std::max<uint32>(m_vkr->GetNonCoherentAtomSize(), 128);
+	if (alignment < atomSize)
+		alignment = atomSize;
+	const uint64 alignedSize = ((uint64)size + atomSize - 1) / atomSize * atomSize;
+	if (alignedSize > std::numeric_limits<uint32>::max())
+		throw std::runtime_error("Vulkan upload reservation size exceeds the allocator limit");
+	size = (uint32)alignedSize;
 
 	for (auto& itr : m_buffers)
 	{
@@ -145,7 +149,7 @@ VKRSynchronizedRingAllocator::AllocatorReservation_t VKRSynchronizedRingAllocato
 void VKRSynchronizedRingAllocator::FlushReservation(AllocatorReservation_t& uploadReservation)
 {
 	cemu_assert_debug(m_bufferType == VKR_BUFFER_TYPE::STAGING); // only the staging buffer isn't coherent
-	// todo - use nonCoherentAtomSize for flush size (instead of hardcoded constant)
+	// Reservations are padded and aligned to nonCoherentAtomSize before reaching this flush.
 	VkMappedMemoryRange flushedRange{};
 	flushedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 	flushedRange.memory = uploadReservation.vkMem;
@@ -220,6 +224,13 @@ VKRSynchronizedHeapAllocator::VKRSynchronizedHeapAllocator(class VKRMemoryManage
 
 VKRSynchronizedHeapAllocator::AllocatorReservation* VKRSynchronizedHeapAllocator::AllocateBufferMemory(uint32 size, uint32 alignment)
 {
+	const uint32 atomSize = m_vkrMemMgr->GetNonCoherentAtomSize();
+	if (alignment < atomSize)
+		alignment = atomSize;
+	const uint64 alignedSize = ((uint64)size + atomSize - 1) / atomSize * atomSize;
+	if (alignedSize > std::numeric_limits<uint32>::max())
+		throw std::runtime_error("Vulkan heap reservation size exceeds the allocator limit");
+	size = (uint32)alignedSize;
 	CHAddr addr = m_chunkedHeap.alloc(size, alignment);
 	m_activeAllocations.emplace_back(addr);
 	AllocatorReservation* res = m_poolAllocatorReservation.allocObj();
@@ -737,6 +748,11 @@ void VKRMemoryManager::imageMemoryFree(VkImageMemAllocation* imageMemAllocation)
 	s_vkTextureAllocationsCurrentlyLive.fetch_sub(1, std::memory_order_relaxed);
 	heapItr->second->freeMem(imageMemAllocation->mem);
 	delete imageMemAllocation;
+}
+
+uint32 VKRMemoryManager::GetNonCoherentAtomSize() const
+{
+	return m_vkr->GetNonCoherentAtomSize();
 }
 
 VulkanMemoryDiagnostics VKRMemoryManager::GetDiagnostics() const
