@@ -88,18 +88,6 @@ LatteTextureVk::LatteTextureVk(class VulkanRenderer* vkRenderer, Latte::E_DIM di
 	if (imageCreateResult != VK_SUCCESS)
 		m_vkr->UnrecoverableError(fmt::format("vkCreateImage(texture) failed: VkResult={}, GX2Format=0x{:04x}, VkFormat={}, extent={}x{}x{}, mips={}, layers={}, tileMode={}, depth={}", (sint32)imageCreateResult, (uint32)format, (sint32)imageInfo.format, imageInfo.extent.width, imageInfo.extent.height, imageInfo.extent.depth, imageInfo.mipLevels, imageInfo.arrayLayers, (uint32)tileMode, isDepth).c_str());
 	
-	if (m_vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
-	{
-		VkDebugUtilsObjectNameInfoEXT objName{};
-		objName.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-		objName.objectType = VK_OBJECT_TYPE_IMAGE;
-		objName.pNext = nullptr;
-		objName.objectHandle = (uint64_t)vkObjTex->m_image;
-		auto objNameStr = fmt::format("tex_{:08x}_fmt{:04x}", physAddress, (uint32)format);
-		objName.pObjectName = objNameStr.c_str();
-		vkSetDebugUtilsObjectNameEXT(m_vkr->GetLogicalDevice(), &objName);
-	}
-
 	vkObjTex->m_flags = imageInfo.flags;
 	vkObjTex->m_format = imageInfo.format;
 
