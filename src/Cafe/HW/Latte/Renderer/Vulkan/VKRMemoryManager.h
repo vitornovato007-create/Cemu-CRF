@@ -245,6 +245,26 @@ class VKRSynchronizedHeapAllocator
 
 void LatteIndices_invalidateAll();
 
+struct VulkanMemoryDiagnostics
+{
+	uint64 textureHeapBytes{};
+	uint64 textureAllocatedBytes{};
+	uint64 textureHeapCount{};
+	uint64 stagingBufferBytes{};
+	uint64 stagingBufferFreeBytes{};
+	uint64 indexBufferBytes{};
+	uint64 indexBufferFreeBytes{};
+	uint64 strideBufferBytes{};
+	uint64 strideBufferFreeBytes{};
+	uint64 bufferCreateAttempts{};
+	uint64 bufferCreateSuccesses{};
+	uint64 bufferCreateFailures{};
+	uint64 imageAllocationAttempts{};
+	uint64 imageAllocationSuccesses{};
+	uint64 imageAllocationFailures{};
+	uint64 imageAllocationBytes{};
+};
+
 class VKRMemoryManager
 {
 	friend class VKRSynchronizedRingAllocator;
@@ -302,6 +322,9 @@ public:
 	bool CreateBufferFromHostMemory(void* hostPointer, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const;
 
 	void DeleteBuffer(VkBuffer& buffer, VkDeviceMemory& deviceMem) const;
+
+	// Snapshot of Vulkan texture heaps and upload allocators plus process-lifetime allocation counters.
+	VulkanMemoryDiagnostics GetDiagnostics() const;
 
 	// overlay info
 	void appendOverlayHeapDebugInfo();
