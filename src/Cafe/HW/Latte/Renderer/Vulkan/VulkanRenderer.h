@@ -158,6 +158,7 @@ public:
 	// memory management
 	std::unique_ptr<VKRMemoryManager> memoryManager;
 	VKRMemoryManager* GetMemoryManager() const { return memoryManager.get(); };
+	uint32 GetNonCoherentAtomSize() const { return std::max<uint32>(m_featureControl.limits.nonCoherentAtomSize, 1); }
 
 	VkSupportedFormatInfo_t m_supportedFormatInfo;
 
