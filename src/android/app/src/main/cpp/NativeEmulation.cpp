@@ -440,6 +440,13 @@ namespace NativeEmulation
 
     static void AppendTextureCacheSnapshot(std::string& report)
     {
+        report.append("Texture lifecycle counters (process lifetime; independent of Vulkan Validation):\n");
+        const auto lifecycle = LatteTexture_GetLifecycleDiagnostics();
+        report.append(fmt::format("  Texture objects constructed: {}\n", lifecycle.constructedTotal));
+        report.append(fmt::format("  Texture objects destroyed: {}\n", lifecycle.destroyedTotal));
+        report.append(fmt::format("  Texture objects currently alive: {}\n", lifecycle.currentlyAlive));
+        report.append("  Note: constructed/destroyed count LatteTexture object lifetimes, not GPU uploads or successful image allocations.\n\n");
+
         report.append("Texture cache snapshot (current live cache; not cumulative load totals):\n");
         const auto textures = LatteTexture_QueryCacheInfo();
         if (textures.empty())
