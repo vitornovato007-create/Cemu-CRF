@@ -566,6 +566,8 @@ namespace NativeEmulation
         const auto pipeline = VulkanPipelineCompiler_GetDiagnostics();
         const auto shader = VulkanShader_GetDiagnostics();
         report.append("Vulkan shader and pipeline diagnostics (process-lifetime counters):\n");
+        report.append(fmt::format("  GLSL preprocess/parse/link/interface failures: {}/{}/{}/{}\n", shader.preprocessFailures, shader.parseFailures, shader.linkFailures, shader.interfaceMappingFailures));
+        report.append(fmt::format("  SPIR-V generation failures: {}\n", shader.spirvGenerationFailures));
         report.append(fmt::format("  Shader module attempts/success/failure: {}/{}/{}\n", shader.moduleCreateAttempts, shader.moduleCreateSuccesses, shader.moduleCreateFailures));
         report.append(fmt::format("  SPIR-V bytes submitted to vkCreateShaderModule: {}\n", shader.moduleCreateBytes));
         report.append(fmt::format("  Descriptor layout attempts/success/failure: {}/{}/{}\n", pipeline.descriptorLayoutAttempts, pipeline.descriptorLayoutSuccesses, pipeline.descriptorLayoutFailures));
