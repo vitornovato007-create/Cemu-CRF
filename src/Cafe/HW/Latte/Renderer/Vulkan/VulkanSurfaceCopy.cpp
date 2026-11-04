@@ -357,8 +357,9 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 	layoutInfo.bindingCount = (uint32_t)descriptorSetLayoutBindings.size();
 	layoutInfo.pBindings = descriptorSetLayoutBindings.data();
 
-	if (vkCreateDescriptorSetLayout(m_logicalDevice, &layoutInfo, nullptr, &vkObjPipeline->m_pixelDSL) != VK_SUCCESS)
-		UnrecoverableError(fmt::format("Failed to create descriptor set layout for surface copy shader").c_str());
+	VkResult layoutResult = vkCreateDescriptorSetLayout(m_logicalDevice, &layoutInfo, nullptr, &vkObjPipeline->m_pixelDSL);
+	if (layoutResult != VK_SUCCESS)
+		UnrecoverableError(fmt::format("Surface-copy vkCreateDescriptorSetLayout failed: VkResult={}, bindings={}", (sint32)layoutResult, layoutInfo.bindingCount).c_str());
 
 	// ##########################################################################################################################################
 
@@ -377,7 +378,7 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 	VkResult result = vkCreatePipelineLayout(m_logicalDevice, &pipelineLayoutInfo, nullptr, &vkObjPipeline->m_pipelineLayout);
 	if (result != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Failed to create pipeline layout: {}", result);
+		cemuLog_log(LogType::Force, "Surface-copy vkCreatePipelineLayout failed: VkResult={}, descriptorSetLayouts={}, pushConstantBytes={}", (sint32)result, pipelineLayoutInfo.setLayoutCount, pipelineLayoutInfo.pushConstantRangeCount ? pipelineLayoutInfo.pPushConstantRanges[0].size : 0);
 		vkObjPipeline->SetPipeline(VK_NULL_HANDLE);
 		return copyPipeline;
 	}
@@ -439,7 +440,7 @@ CopySurfacePipelineInfo* VulkanRenderer::copySurface_getOrCreateGraphicsPipeline
 	if (result != VK_SUCCESS)
 	{
 		copyPipeline->vkObjPipeline->SetPipeline(nullptr);
-		cemuLog_log(LogType::Force, "Failed to create graphics pipeline for surface copy. Error {} Info:", (sint32)result);
+		cemuLog_log(LogType::Force, "Surface-copy vkCreateGraphicsPipelines failed: VkResult={}, renderPass={}, sourceFormat={}, destinationFormat={}, destinationDepth={}", (sint32)result, (void*)copyPipeline->vkObjRenderPass->m_renderPass, (sint32)state.sourceTexture->GetFormat(), (sint32)state.destinationTexture->GetFormat(), state.destinationTexture->isDepth);
 		cemu_assert_suspicious();
 	}
 	else
@@ -467,9 +468,10 @@ VKRObjectTextureView* VulkanRenderer::surfaceCopy_createImageView(LatteTextureVk
 	viewCreateInfo.subresourceRange.levelCount = 1;
 	viewCreateInfo.subresourceRange.baseArrayLayer = sliceIndex;
 	viewCreateInfo.subresourceRange.layerCount = 1;
-	VkImageView imageView;
-	if (vkCreateImageView(m_logicalDevice, &viewCreateInfo, nullptr, &imageView) != VK_SUCCESS)
-		UnrecoverableError("Failed to create framebuffer image view for copy surface operation");
+	VkImageView imageView = VK_NULL_HANDLE;
+	const VkResult imageViewResult = vkCreateImageView(m_logicalDevice, &viewCreateInfo, nullptr, &imageView);
+	if (imageViewResult != VK_SUCCESS)
+		UnrecoverableError(fmt::format("Surface-copy vkCreateImageView failed: VkResult={}, image={}, format={}, mip={}, slice={}, depth={}", (sint32)imageViewResult, (void*)viewCreateInfo.image, (sint32)viewCreateInfo.format, mipIndex, sliceIndex, textureVk->isDepth).c_str());
 	return new VKRObjectTextureView(textureVk->GetImageObj(), imageView);
 }
 
@@ -523,10 +525,9 @@ VKRObjectDescriptorSet* VulkanRenderer::surfaceCopy_getOrCreateDescriptorSet(VkC
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &pipelineInfo->vkObjPipeline->m_pixelDSL;
 
-	if (vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &vkObjDescriptorSet->descriptorSet) != VK_SUCCESS)
-	{
-		UnrecoverableError("failed to allocate descriptor set for surface copy operation");
-	}
+	const VkResult descriptorResult = vkAllocateDescriptorSets(m_logicalDevice, &allocInfo, &vkObjDescriptorSet->descriptorSet);
+	if (descriptorResult != VK_SUCCESS)
+		UnrecoverableError(fmt::format("Surface-copy vkAllocateDescriptorSets failed: VkResult={}, pool={}, layout={}", (sint32)descriptorResult, (void*)allocInfo.descriptorPool, (void*)pipelineInfo->vkObjPipeline->m_pixelDSL).c_str());
 
 	// create view
 	VKRObjectTextureView* vkObjImageView = surfaceCopy_createImageView(state.sourceTexture, state.srcSlice, state.srcMip);
@@ -549,8 +550,9 @@ VKRObjectDescriptorSet* VulkanRenderer::surfaceCopy_getOrCreateDescriptorSet(VkC
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
-	if (vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &vkObjImageView->m_textureDefaultSampler[0]) != VK_SUCCESS)
-		UnrecoverableError("Failed to create texture sampler for surface copy operation");
+	const VkResult samplerResult = vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &vkObjImageView->m_textureDefaultSampler[0]);
+	if (samplerResult != VK_SUCCESS)
+		UnrecoverableError(fmt::format("Surface-copy vkCreateSampler failed: VkResult={}, filter={}, mipMode={}", (sint32)samplerResult, (sint32)samplerInfo.minFilter, (sint32)samplerInfo.mipmapMode).c_str());
 
 	// create descriptor image info
 	VkDescriptorImageInfo descriptorImageInfo{};
