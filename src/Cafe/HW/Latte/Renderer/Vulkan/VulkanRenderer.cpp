@@ -3180,7 +3180,7 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 		throw std::runtime_error(fmt::format("Failed to present swapchain image: VkResult={}", (sint32)result));
 	}
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-		cemuLog_log(LogType::Force, "vkQueuePresentKHR requests swapchain recreation: VkResult={}, swapchain={}, imageIndex={}", (sint32)result, (void*)chainInfo.m_swapchain, chainInfo.swapchainImageIndex);
+		cemuLog_log(LogType::Force, "vkQueuePresentKHR returned a swapchain status requiring review: VkResult={}, swapchain={}, imageIndex={}", (sint32)result, (void*)chainInfo.m_swapchain, chainInfo.swapchainImageIndex);
 	if(result == VK_ERROR_OUT_OF_DATE_KHR)
 		chainInfo.m_shouldRecreate = true;
 
