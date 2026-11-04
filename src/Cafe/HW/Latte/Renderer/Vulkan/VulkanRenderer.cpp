@@ -1266,11 +1266,9 @@ VkDeviceCreateInfo VulkanRenderer::CreateDeviceCreateInfo(const std::vector<VkDe
 
 	createInfo.pNext = deviceExtensionStructs;
 
-	if (!m_layerNames.empty())
-	{
-		createInfo.enabledLayerCount = m_layerNames.size();
-		createInfo.ppEnabledLayerNames = m_layerNames.data();
-	}
+	// Validation layers are intentionally not enabled by this Android fork.
+	createInfo.enabledLayerCount = 0;
+	createInfo.ppEnabledLayerNames = nullptr;
 
 	return createInfo;
 }
