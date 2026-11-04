@@ -57,7 +57,7 @@ const std::map<LogType, std::string> g_logging_window_mapping
 	{LogType::TextureCache,       "Texture cache"},
 	{LogType::TextureReadback,    "Texture readback"},
 	{LogType::OpenGLLogging,      "OpenGL debug output"},
-	{LogType::VulkanValidation,   "Vulkan validation layer"},
+	{LogType::Monitor,            "Monitor 2.0"},
 };
 
 std::atomic<LogCallbacks*> g_logCallbacks{ nullptr };
