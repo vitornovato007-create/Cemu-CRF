@@ -7,6 +7,7 @@
 #include "Cemu/FileCache/FileCache.h"
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <vector>
 #include <glslang/Public/ShaderLang.h>
@@ -18,6 +19,24 @@ class FileCache* s_spirvCache{nullptr};
 
 extern std::atomic_int g_compiled_shaders_total;
 extern std::atomic_int g_compiled_shaders_async;
+
+namespace
+{
+	std::atomic<uint64> s_vkShaderModuleAttempts{ 0 };
+	std::atomic<uint64> s_vkShaderModuleSuccesses{ 0 };
+	std::atomic<uint64> s_vkShaderModuleFailures{ 0 };
+	std::atomic<uint64> s_vkShaderModuleBytes{ 0 };
+}
+
+VulkanShaderDiagnostics VulkanShader_GetDiagnostics()
+{
+	VulkanShaderDiagnostics result;
+	result.moduleCreateAttempts = s_vkShaderModuleAttempts.load(std::memory_order_relaxed);
+	result.moduleCreateSuccesses = s_vkShaderModuleSuccesses.load(std::memory_order_relaxed);
+	result.moduleCreateFailures = s_vkShaderModuleFailures.load(std::memory_order_relaxed);
+	result.moduleCreateBytes = s_vkShaderModuleBytes.load(std::memory_order_relaxed);
+	return result;
+}
 
 
 // On GLSL failures, include only the source lines around the compiler-reported
@@ -329,12 +348,16 @@ void RendererShaderVk::CreateVkShaderModule(std::span<uint32> spirvBuffer)
 
 	VkDevice m_device = vkr->GetLogicalDevice();
 
+	s_vkShaderModuleAttempts.fetch_add(1, std::memory_order_relaxed);
 	VkResult result = vkCreateShaderModule(m_device, &createInfo, nullptr, &m_shader_module);
 	if (result != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Vulkan: Shader error");
+		s_vkShaderModuleFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Vulkan shader module creation failed: stage={}, baseHash={:016x}, auxHash={:016x}, SPIR-V bytes={}, VkResult={}", (uint32)GetType(), m_baseHash, m_auxHash, createInfo.codeSize, (sint32)result);
 		throw std::runtime_error(fmt::format("Failed to create shader module: {}", result));
 	}
+	s_vkShaderModuleSuccesses.fetch_add(1, std::memory_order_relaxed);
+	s_vkShaderModuleBytes.fetch_add(createInfo.codeSize, std::memory_order_relaxed);
 
 	// set debug name
 	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
