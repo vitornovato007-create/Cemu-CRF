@@ -680,6 +680,25 @@ VulkanRenderer::VulkanRenderer()
 	// extension info
 	// cemuLog_log(LogType::Force, "VK_KHR_dynamic_rendering: {}", m_featureControl.deviceExtensions.dynamic_rendering?"supported":"not supported");
 
+	auto cleanupBufferInitialization = [&]()
+	{
+		if (m_uniformVarBufferPtr != nullptr && m_uniformVarBufferMemory != VK_NULL_HANDLE)
+			vkUnmapMemory(m_logicalDevice, m_uniformVarBufferMemory);
+		m_uniformVarBufferPtr = nullptr;
+		if (m_textureReadbackBufferPtr != nullptr && m_textureReadbackBufferMemory != VK_NULL_HANDLE)
+			vkUnmapMemory(m_logicalDevice, m_textureReadbackBufferMemory);
+		m_textureReadbackBufferPtr = nullptr;
+		if (m_occlusionQueries.ptrQueryResults != nullptr && m_occlusionQueries.memoryQueryResults != VK_NULL_HANDLE)
+			vkUnmapMemory(m_logicalDevice, m_occlusionQueries.memoryQueryResults);
+		m_occlusionQueries.ptrQueryResults = nullptr;
+		memoryManager->DeleteBuffer(m_uniformVarBuffer, m_uniformVarBufferMemory);
+		memoryManager->DeleteBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory);
+		memoryManager->DeleteBuffer(m_xfbRingBuffer, m_xfbRingBufferMemory);
+		memoryManager->DeleteBuffer(m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults);
+	};
+
+	try
+	{
 	auto mapBufferOrThrow = [&](VkDeviceMemory memory, const char* label) -> void*
 	{
 		void* mapped = nullptr;
@@ -725,6 +744,12 @@ VulkanRenderer::VulkanRenderer()
 		!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults))
 		throw std::runtime_error("Unable to allocate Vulkan occlusion query result buffer");
 	m_occlusionQueries.ptrQueryResults = (uint64*)mapBufferOrThrow(m_occlusionQueries.memoryQueryResults, "occlusion query result buffer");
+	}
+	catch (...)
+	{
+		cleanupBufferInitialization();
+		throw;
+	}
 
 	for (sint32 i = 0; i < OCCLUSION_QUERY_POOL_SIZE; i++)
 		m_occlusionQueries.list_availableQueryIndices.emplace_back(i);
