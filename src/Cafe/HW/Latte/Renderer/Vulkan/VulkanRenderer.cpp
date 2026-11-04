@@ -3796,7 +3796,12 @@ LatteTextureReadbackInfo* VulkanRenderer::texture_createReadback(LatteTextureVie
 	auto* result = new LatteTextureReadbackInfoVk(m_logicalDevice, textureView);
 	m_textureReadbackBufferWriteIndex = (m_textureReadbackBufferWriteIndex + uploadAlignment - 1) & ~(uploadAlignment - 1);
 	if ((uint64)m_textureReadbackBufferWriteIndex + uploadSize + uploadAlignment > TEXTURE_READBACK_SIZE)
+	{
+		cemuLog_log(LogType::Force,
+			"[Monitor 2.0] ReadbackRing wrap: previousOffset={} transferBytes={} capacity={} submittedCommandBuffers={}",
+			m_textureReadbackBufferWriteIndex, uploadSize, TEXTURE_READBACK_SIZE, GetCurrentCommandBufferId());
 		m_textureReadbackBufferWriteIndex = 0;
+	}
 	const uint32 uploadBufferOffset = m_textureReadbackBufferWriteIndex;
 	m_textureReadbackBufferWriteIndex += uploadSize;
 	result->SetBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory, m_textureReadbackBufferPtr,
