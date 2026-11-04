@@ -6,6 +6,7 @@
 #include "Cafe/HW/Latte/Core/LatteTexture.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
+#include "Cafe/HW/Latte/Renderer/Vulkan/VulkanPipelineCompiler.h"
 #include "Cafe/CafeSystem.h"
 #include "Cemu/GuiSystem/GuiSystem.h"
 #include "GameTitleLoader.h"
@@ -564,6 +565,16 @@ namespace NativeEmulation
         {
             report.append("Vulkan memory diagnostics: renderer not initialized in this process.\n\n");
         }
+        const auto pipeline = VulkanPipelineCompiler_GetDiagnostics();
+        const auto shader = VulkanShader_GetDiagnostics();
+        report.append("Vulkan shader and pipeline diagnostics (process-lifetime counters):\n");
+        report.append(fmt::format("  Shader module attempts/success/failure: {}/{}/{}\n", shader.moduleCreateAttempts, shader.moduleCreateSuccesses, shader.moduleCreateFailures));
+        report.append(fmt::format("  SPIR-V bytes submitted to vkCreateShaderModule: {}\n", shader.moduleCreateBytes));
+        report.append(fmt::format("  Descriptor layout attempts/success/failure: {}/{}/{}\n", pipeline.descriptorLayoutAttempts, pipeline.descriptorLayoutSuccesses, pipeline.descriptorLayoutFailures));
+        report.append(fmt::format("  Pipeline layout attempts/success/failure: {}/{}/{}\n", pipeline.pipelineLayoutAttempts, pipeline.pipelineLayoutSuccesses, pipeline.pipelineLayoutFailures));
+        report.append(fmt::format("  Graphics pipeline attempts/success/failure: {}/{}/{}\n", pipeline.graphicsPipelineAttempts, pipeline.graphicsPipelineSuccesses, pipeline.graphicsPipelineFailures));
+        report.append(fmt::format("  Pipeline compile-required responses: {}\n", pipeline.pipelineCompileRequired));
+        report.append(fmt::format("  Out-of-device-memory pipeline retries: {}\n\n", pipeline.outOfDeviceMemoryRetries));
         AppendTextureCacheSnapshot(report);
         report.append(s_androidLogCapture.Snapshot());
         if (report.empty() || report.back() != '\n')
