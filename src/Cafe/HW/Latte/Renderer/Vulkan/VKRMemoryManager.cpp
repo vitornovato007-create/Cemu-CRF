@@ -673,8 +673,17 @@ void VKRMemoryManager::DeleteBuffer(VkBuffer& buffer, VkDeviceMemory& deviceMem)
 VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 {
 	s_vkImageAllocationAttempts.fetch_add(1, std::memory_order_relaxed);
-	VkMemoryRequirements memRequirements;
+	VkMemoryRequirements memRequirements{};
 	vkGetImageMemoryRequirements(m_vkr->GetLogicalDevice(), image, &memRequirements);
+	if (memRequirements.size == 0 || memRequirements.size > 0x7FFF0000ull ||
+		memRequirements.alignment == 0 || memRequirements.alignment > std::numeric_limits<uint32>::max() ||
+		(memRequirements.alignment & (memRequirements.alignment - 1)) != 0)
+	{
+		s_vkImageAllocationFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Vulkan image memory requirements exceed the texture heap limits: image={}, size={}, alignment={}, memoryTypeBits={:#x}", (void*)image, memRequirements.size, memRequirements.alignment, memRequirements.memoryTypeBits);
+		m_vkr->UnrecoverableError("Invalid or unsupported Vulkan image memory requirements");
+		return nullptr;
+	}
 	uint32 typeFilter = memRequirements.memoryTypeBits;
 
 	// get or create heap for this type filter
