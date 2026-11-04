@@ -11,6 +11,7 @@ namespace
 {
 	std::atomic<uint64> s_textureSliceLoadAttempts{ 0 };
 	std::atomic<uint64> s_textureDecoderUnavailable{ 0 };
+	std::atomic<uint64> s_textureZeroDecodedSize{ 0 };
 	std::atomic<uint64> s_textureDecodeCalls{ 0 };
 	std::atomic<uint64> s_textureDecodedBytes{ 0 };
 	std::atomic<uint64> s_textureUploadBufferBytesRequested{ 0 };
@@ -24,6 +25,7 @@ LatteTextureLoadDiagnostics LatteTextureLoader_GetDiagnostics()
 	LatteTextureLoadDiagnostics result;
 	result.sliceLoadAttempts = s_textureSliceLoadAttempts.load(std::memory_order_relaxed);
 	result.decoderUnavailable = s_textureDecoderUnavailable.load(std::memory_order_relaxed);
+	result.zeroDecodedSize = s_textureZeroDecodedSize.load(std::memory_order_relaxed);
 	result.decodeCalls = s_textureDecodeCalls.load(std::memory_order_relaxed);
 	result.decodedBytes = s_textureDecodedBytes.load(std::memory_order_relaxed);
 	result.uploadBufferBytesRequested = s_textureUploadBufferBytesRequested.load(std::memory_order_relaxed);
@@ -748,6 +750,9 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	{
 		s_textureDecoderUnavailable.fetch_add(1, std::memory_order_relaxed);
 		RecordTextureDiagnosticEvent(LatteTextureDiagnosticEventType::DecoderUnavailable, format, width, height, sliceIndex, mipIndex, 0, tex->isDepth);
+		cemuLog_log(LogType::Force, "Texture decoder unavailable: GX2Format=0x{:04x}, resolution={}x{}, slice={}, mip={}, dim={}, depth={}", (uint32)format, width, height, sliceIndex, mipIndex, (uint32)dim, tex->isDepth);
+		if (textureLoader.dumpRGBA)
+			free(textureLoader.dumpRGBA);
 		return;
 	}
 
@@ -756,6 +761,15 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 
 	// allocate memory for decoded texture
 	uint32 imageSize = texDecoder->calculateImageSize(&textureLoader);
+	if (imageSize == 0)
+	{
+		s_textureZeroDecodedSize.fetch_add(1, std::memory_order_relaxed);
+		RecordTextureDiagnosticEvent(LatteTextureDiagnosticEventType::InvalidDecodedSize, format, width, height, sliceIndex, mipIndex, 0, tex->isDepth);
+		cemuLog_log(LogType::Force, "Texture decoder returned zero output size: GX2Format=0x{:04x}, resolution={}x{}, slice={}, mip={}, dim={}, depth={}", (uint32)format, width, height, sliceIndex, mipIndex, (uint32)dim, tex->isDepth);
+		if (textureLoader.dumpRGBA)
+			free(textureLoader.dumpRGBA);
+		return;
+	}
 	s_textureUploadBufferBytesRequested.fetch_add(imageSize, std::memory_order_relaxed);
 
 	uint8* pixelData = (uint8*)g_renderer->texture_acquireTextureUploadBuffer(imageSize);
