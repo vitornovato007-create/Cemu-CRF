@@ -2232,14 +2232,11 @@ void VulkanRenderer::WaitForNextFinishedCommandBuffer()
 {
 	cemu_assert_debug(m_commandBufferSyncIndex != m_commandBufferIndex);
 	// wait on least recently submitted command buffer
-	VkResult result = vkWaitForFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferSyncIndex], true, UINT64_MAX);
-	if (result == VK_TIMEOUT)
+	const VkResult result = vkWaitForFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferSyncIndex], VK_TRUE, UINT64_MAX);
+	if (result != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "vkWaitForFences: Returned VK_TIMEOUT on infinite fence");
-	}
-	else if (result != VK_SUCCESS)
-	{
-		cemuLog_log(LogType::Force, "vkWaitForFences: Returned unhandled error {}", (sint32)result);
+		cemuLog_log(LogType::Force, "Command-buffer fence wait failed: VkResult={}, syncIndex={}, commandBufferIndex={}, fence={}", (sint32)result, m_commandBufferSyncIndex, m_commandBufferIndex, (void*)m_cmd_buffer_fences[m_commandBufferSyncIndex]);
+		throw std::runtime_error(fmt::format("Vulkan command-buffer fence wait failed: VkResult={}", (sint32)result));
 	}
 	// process
 	ProcessFinishedCommandBuffers();
@@ -3185,7 +3182,10 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 			if (waitPresentResult == VK_ERROR_OUT_OF_DATE_KHR)
 				chainInfo.m_shouldRecreate = true;
 			else if (waitPresentResult != VK_SUCCESS && waitPresentResult != VK_TIMEOUT)
-				cemuLog_log(LogType::Force, "vkWaitForPresentKHR failed: VkResult={}, presentId={}", (sint32)waitPresentResult, waitFrameId);
+			{
+				cemuLog_log(LogType::Force, "vkWaitForPresentKHR failed: VkResult={}, swapchain={}, presentId={}, queueDepth={}", (sint32)waitPresentResult, (void*)chainInfo.m_swapchain, waitFrameId, chainInfo.m_queueDepth);
+				throw std::runtime_error(fmt::format("Vulkan present wait failed: VkResult={}", (sint32)waitPresentResult));
+			}
 			chainInfo.m_queueDepth--;
 		}
 	}
