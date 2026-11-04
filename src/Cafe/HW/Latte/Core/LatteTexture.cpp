@@ -822,10 +822,12 @@ bool IsDimensionCompatibleForGX2View(Latte::E_DIM baseDim, Latte::E_DIM viewDim)
 	return false;
 }
 
-VIEWCOMPATIBILITY LatteTexture_CanTextureBeRepresentedAsView(LatteTexture* baseTexture, uint32 physAddr, sint32 width, sint32 height, sint32 pitch, Latte::E_DIM dimView, Latte::E_GX2SURFFMT format, bool isDepth, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, sint32& relativeMipIndex, sint32& relativeSliceIndex)
+VIEWCOMPATIBILITY LatteTexture_CanTextureBeRepresentedAsView(LatteTexture* baseTexture, uint32 physAddr, sint32 width, sint32 height, sint32 pitch, Latte::E_HWTILEMODE tileMode, Latte::E_DIM dimView, Latte::E_GX2SURFFMT format, bool isDepth, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, sint32& relativeMipIndex, sint32& relativeSliceIndex)
 {
 	relativeMipIndex = 0;
 	relativeSliceIndex = 0;
+	if (baseTexture->tileMode != tileMode)
+		return VIEW_NOT_COMPATIBLE;
 	if (baseTexture->overwriteInfo.hasFormatOverwrite)
 	{
 		// if the base format is overwritten, then we only allow aliasing if the view format matches the base format
@@ -933,7 +935,7 @@ void LatteTexture_DeleteAbsorbedSubtextures(LatteTexture* texture)
 
 		sint32 relativeMipIndex;
 		sint32 relativeSliceIndex;
-		if (LatteTexture_CanTextureBeRepresentedAsView(texture, relatedTexture->physAddress, relatedTexture->width, relatedTexture->height, relatedTexture->pitch, relatedTexture->dim, relatedTexture->format, relatedTexture->isDepth, 0, relatedTexture->mipLevels, 0, relatedTexture->depth, relativeMipIndex, relativeSliceIndex) == VIEW_COMPATIBLE)
+		if (LatteTexture_CanTextureBeRepresentedAsView(texture, relatedTexture->physAddress, relatedTexture->width, relatedTexture->height, relatedTexture->pitch, relatedTexture->tileMode, relatedTexture->dim, relatedTexture->format, relatedTexture->isDepth, 0, relatedTexture->mipLevels, 0, relatedTexture->depth, relativeMipIndex, relativeSliceIndex) == VIEW_COMPATIBLE)
 		{
 			LatteTexture_Delete(relatedTexture);
 			LatteGPUState.repeatTextureInitialization = true;
@@ -1023,7 +1025,7 @@ LatteTextureView* LatteTexture_CreateMapping(MPTR physAddr, MPTR physMipAddr, si
 	{
 		sint32 relativeMipIndex;
 		sint32 relativeSliceIndex;
-		VIEWCOMPATIBILITY viewCompatibility = LatteTexture_CanTextureBeRepresentedAsView(tex, physAddr, width, height, pitch, dimView, format, isDepth, firstMip, numMip, firstSlice, numSlice, relativeMipIndex, relativeSliceIndex);
+		VIEWCOMPATIBILITY viewCompatibility = LatteTexture_CanTextureBeRepresentedAsView(tex, physAddr, width, height, pitch, tileMode, dimView, format, isDepth, firstMip, numMip, firstSlice, numSlice, relativeMipIndex, relativeSliceIndex);
 		if (viewCompatibility == VIEW_NOT_COMPATIBLE)
 		{
 			allowCreateNewDataTexture = true;
@@ -1061,7 +1063,7 @@ LatteTextureView* LatteTexture_CreateMapping(MPTR physAddr, MPTR physMipAddr, si
 				// by default views only create a lookup for the base texture physAddress
 				view->CreateLookupForSubTexture(relativeMipIndex, relativeSliceIndex);
 #ifdef CEMU_DEBUG_ASSERT
-				LatteTextureView* testView = LatteTextureViewLookupCache::lookup(physAddr, width, height, depth, pitch, firstMip, numMip, firstSlice, numSlice, format, dimView);
+				LatteTextureView* testView = LatteTextureViewLookupCache::lookup(physAddr, width, height, depth, pitch, firstMip, numMip, firstSlice, numSlice, format, dimView, tileMode);
 				cemu_assert(testView);
 #endif
 			}
@@ -1084,7 +1086,7 @@ LatteTextureView* LatteTexture_CreateMapping(MPTR physAddr, MPTR physMipAddr, si
 	// create view
 	sint32 relativeMipIndex;
 	sint32 relativeSliceIndex;
-	VIEWCOMPATIBILITY viewCompatibility = LatteTexture_CanTextureBeRepresentedAsView(newTexture, physAddr, width, height, pitch, dimView, format, isDepth, firstMip, numMip, firstSlice, numSlice, relativeMipIndex, relativeSliceIndex);
+	VIEWCOMPATIBILITY viewCompatibility = LatteTexture_CanTextureBeRepresentedAsView(newTexture, physAddr, width, height, pitch, tileMode, dimView, format, isDepth, firstMip, numMip, firstSlice, numSlice, relativeMipIndex, relativeSliceIndex);
 	cemu_assert(viewCompatibility == VIEW_COMPATIBLE);
 	return view->baseTexture->GetOrCreateView(dimView, format, relativeMipIndex + firstMip, numMip, relativeSliceIndex + firstSlice, numSlice);
 }
@@ -1143,9 +1145,9 @@ LatteTextureView* LatteTC_GetTextureSliceViewOrTryCreate(MPTR srcImagePtr, MPTR 
 {
 	LatteTextureView* sourceView;
 	if(requireExactResolution == false)
-		sourceView = LatteTextureViewLookupCache::lookupSliceMinSize(srcImagePtr, srcWidth, srcHeight, srcPitch, srcMip, srcSlice, srcFormat);
+		sourceView = LatteTextureViewLookupCache::lookupSliceMinSize(srcImagePtr, srcWidth, srcHeight, srcPitch, srcMip, srcSlice, srcFormat, srcTileMode);
 	else
-		sourceView = LatteTextureViewLookupCache::lookupSlice(srcImagePtr, srcWidth, srcHeight, srcPitch, srcMip, srcSlice, srcFormat);
+		sourceView = LatteTextureViewLookupCache::lookupSlice(srcImagePtr, srcWidth, srcHeight, srcPitch, srcMip, srcSlice, srcFormat, srcTileMode);
 	if (sourceView)
 		return sourceView;
 	return LatteTexture_CreateMapping(srcImagePtr, srcMipPtr, srcWidth, srcHeight, srcDepth, srcPitch, srcTileMode, srcSwizzle, srcMip, 1, srcSlice, 1, srcFormat, srcDepth > 1 ? Latte::E_DIM::DIM_2D_ARRAY : Latte::E_DIM::DIM_2D, Latte::E_DIM::DIM_2D, false, false);
