@@ -1,6 +1,7 @@
 #include "Cafe/HW/Latte/Core/LatteConst.h"
 #include "Cafe/HW/Latte/Core/LatteShaderAssembly.h"
 #include "Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompiler.h"
+#include <cstring>
 
 void LatteGSCopyShaderParser_addFetchedParam(LatteParsedGSCopyShader* shaderContext, uint32 offset, uint32 gprIndex)
 {
@@ -73,11 +74,18 @@ bool LatteGSCopyShaderParser_parseClauseVtx(LatteParsedGSCopyShader* shaderConte
 {
 	for(uint32 i=0; i<count; i++)
 	{
-		uint32 instructionAddr = addr*2+i*4;
-		uint32 word0 = *(uint32*)(programData+instructionAddr*4+0);
-		uint32 word1 = *(uint32*)(programData+instructionAddr*4+4);
-		uint32 word2 = *(uint32*)(programData+instructionAddr*4+8);
-		uint32 word3 = *(uint32*)(programData+instructionAddr*4+12);
+		const uint64 instructionOffset = ((uint64)addr * 2 + (uint64)i * 4) * sizeof(uint32);
+		if (instructionOffset > programSize || programSize - instructionOffset < 4 * sizeof(uint32))
+		{
+			cemuLog_log(LogType::Force, "Copy shader VTX clause exceeds program bounds: addr={}, instruction={}, byteOffset={}, programBytes={}", addr, i, instructionOffset, programSize);
+			return false;
+		}
+		uint32 word0, word1, word2, word3;
+		const uint8* instructionData = programData + instructionOffset;
+		std::memcpy(&word0, instructionData + 0, sizeof(uint32));
+		std::memcpy(&word1, instructionData + 4, sizeof(uint32));
+		std::memcpy(&word2, instructionData + 8, sizeof(uint32));
+		std::memcpy(&word3, instructionData + 12, sizeof(uint32));
 		uint32 inst0_4 = (word0>>0)&0x1F;
 		if( inst0_4 == GPU7_TEX_INST_VFETCH )
 		{
@@ -131,7 +139,11 @@ bool LatteGSCopyShaderParser_parseClauseVtx(LatteParsedGSCopyShader* shaderConte
 
 LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint32 programSize)
 {
-	cemu_assert_debug((programSize & 3) == 0);
+	if (programData == nullptr || programSize < 8 || (programSize & 3) != 0)
+	{
+		cemuLog_log(LogType::Force, "Copy shader parser received invalid program buffer: dataNull={}, programBytes={}", programData == nullptr, programSize);
+		return nullptr;
+	}
 	LatteParsedGSCopyShader* shaderContext = new LatteParsedGSCopyShader();
 	shaderContext->numParam = 0;
 	// parse control flow instructions
