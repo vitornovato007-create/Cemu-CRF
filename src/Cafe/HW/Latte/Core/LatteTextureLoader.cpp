@@ -491,10 +491,47 @@ void decodeBC5Block_UNORM(uint8* blockStorage, float* rgOutput)
 
 void decodeBC4Block_SNORM(uint8* blockStorage, float* rOutput)
 {
-	float rgOutput[4 * 4 * 2];
-	decodeBC5Block_SNORM(blockStorage, rgOutput);
-	for (uint32 i = 0; i < 16; ++i)
-		rOutput[i] = rgOutput[i * 2];
+	// BC4_SNORM stores exactly one 8-byte channel block. Do not route this
+	// through the BC5 decoder: that decoder also reads the second (green)
+	// 8-byte block and would read past the end of a BC4 block.
+	const uint8* blockInput = blockStorage;
+	float red[8];
+
+	red[0] = (float)((sint8)blockInput[0]) / 127.0f;
+	red[1] = (float)((sint8)blockInput[1]) / 127.0f;
+	red[0] = std::max(-1.0f, red[0]);
+	red[1] = std::max(-1.0f, red[1]);
+
+	if (red[0] > red[1])
+	{
+		red[2] = (6 * red[0] + 1 * red[1]) / 7.0f;
+		red[3] = (5 * red[0] + 2 * red[1]) / 7.0f;
+		red[4] = (4 * red[0] + 3 * red[1]) / 7.0f;
+		red[5] = (3 * red[0] + 4 * red[1]) / 7.0f;
+		red[6] = (2 * red[0] + 5 * red[1]) / 7.0f;
+		red[7] = (1 * red[0] + 6 * red[1]) / 7.0f;
+	}
+	else
+	{
+		red[2] = (4 * red[0] + 1 * red[1]) / 5.0f;
+		red[3] = (3 * red[0] + 2 * red[1]) / 5.0f;
+		red[4] = (2 * red[0] + 3 * red[1]) / 5.0f;
+		red[5] = (1 * red[0] + 4 * red[1]) / 5.0f;
+		red[6] = -1.0f;
+		red[7] = 1.0f;
+	}
+
+	// Six bytes contain sixteen 3-bit indices (little-endian bit order).
+	const uint32 row0 = ((uint32)blockInput[4] << 16) |
+		((uint32)blockInput[3] << 8) | (uint32)blockInput[2];
+	const uint32 row1 = ((uint32)blockInput[7] << 16) |
+		((uint32)blockInput[6] << 8) | (uint32)blockInput[5];
+
+	for (uint32 i = 0; i < 8; ++i)
+	{
+		rOutput[i] = red[(row0 >> (i * 3)) & 7];
+		rOutput[i + 8] = red[(row1 >> (i * 3)) & 7];
+	}
 }
 
 void decodeBC5Block_SNORM(uint8* blockStorage, float* rgOutput) // todo - can merge this with the UNORM implementation by using a template?
