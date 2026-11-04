@@ -84,8 +84,9 @@ LatteTextureVk::LatteTextureVk(class VulkanRenderer* vkRenderer, Latte::E_DIM di
 		cemu_assert_unimplemented();
 	}
 
-	if (vkCreateImage(m_vkr->GetLogicalDevice(), &imageInfo, nullptr, &vkObjTex->m_image) != VK_SUCCESS)
-		m_vkr->UnrecoverableError("Failed to create texture image");
+	const VkResult imageCreateResult = vkCreateImage(m_vkr->GetLogicalDevice(), &imageInfo, nullptr, &vkObjTex->m_image);
+	if (imageCreateResult != VK_SUCCESS)
+		m_vkr->UnrecoverableError(fmt::format("vkCreateImage(texture) failed: VkResult={}, GX2Format=0x{:04x}, VkFormat={}, extent={}x{}x{}, mips={}, layers={}, tileMode={}, depth={}", (sint32)imageCreateResult, (uint32)format, (sint32)imageInfo.format, imageInfo.extent.width, imageInfo.extent.height, imageInfo.extent.depth, imageInfo.mipLevels, imageInfo.arrayLayers, (uint32)tileMode, isDepth).c_str());
 	
 	if (m_vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
 	{
