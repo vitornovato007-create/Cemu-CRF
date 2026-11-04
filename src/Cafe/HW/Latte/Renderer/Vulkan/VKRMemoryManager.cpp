@@ -280,9 +280,14 @@ void VKRSynchronizedHeapAllocator::GetStats(uint32& numBuffers, size_t& totalBuf
 VkTextureChunkedHeap::~VkTextureChunkedHeap()
 {
 	VkDevice device = VulkanRenderer::GetInstance()->GetLogicalDevice();
+	s_vkTextureHeapReservedBytes.fetch_sub(m_numHeapBytes, std::memory_order_relaxed);
 	for (auto& i : m_list_chunkInfo)
 	{
-		vkFreeMemory(device, i.mem, nullptr);
+		if (i.mem != VK_NULL_HANDLE)
+		{
+			vkFreeMemory(device, i.mem, nullptr);
+			s_vkTextureHeapChunks.fetch_sub(1, std::memory_order_relaxed);
+		}
 	}
 }
 
