@@ -722,9 +722,9 @@ private:
 		std::vector<class LatteQueryObjectVk*> list_currentlyActiveQueries;
 		uint64 m_lastCommandBuffer{};
 		// query result buffer
-		VkBuffer bufferQueryResults;
-		VkDeviceMemory memoryQueryResults;
-		uint64* ptrQueryResults;
+		VkBuffer bufferQueryResults{ VK_NULL_HANDLE };
+		VkDeviceMemory memoryQueryResults{ VK_NULL_HANDLE };
+		uint64* ptrQueryResults{};
 		std::vector<uint16> list_availableQueryIndices;
 	}m_occlusionQueries;
 
