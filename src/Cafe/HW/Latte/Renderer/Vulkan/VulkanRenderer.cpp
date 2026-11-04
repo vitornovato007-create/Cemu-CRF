@@ -185,14 +185,18 @@ std::vector<VulkanRenderer::DeviceInfo> VulkanRenderer::GetDevices()
 			throw std::runtime_error("can't initialize instanced vulkan functions");
 
 		uint32_t device_count = 0;
-		vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+		VkResult enumerateResult = vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+		if (enumerateResult != VK_SUCCESS)
+			throw std::runtime_error(fmt::format("vkEnumeratePhysicalDevices(count) failed: VkResult={}", (sint32)enumerateResult));
 		if (device_count == 0)
 			throw std::runtime_error("Failed to find a GPU with Vulkan support.");
 
 		// create tmp surface to create a logical device
 		auto surface = CreateFramebufferSurface(instance, GuiSystem::getWindowInfo().window_main);
 		std::vector<VkPhysicalDevice> devices(device_count);
-		vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+		enumerateResult = vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+		if (enumerateResult != VK_SUCCESS)
+			throw std::runtime_error(fmt::format("vkEnumeratePhysicalDevices(list) failed: VkResult={}", (sint32)enumerateResult));
 		for (const auto& device : devices)
 		{
 			if (IsDeviceSuitable(surface, device))
@@ -207,8 +211,13 @@ std::vector<VulkanRenderer::DeviceInfo> VulkanRenderer::GetDevices()
 		}
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 	}
+	catch (const std::exception& exception)
+	{
+		cemuLog_log(LogType::Force, "Vulkan device enumeration failed: {}", exception.what());
+	}
 	catch (...)
 	{
+		cemuLog_log(LogType::Force, "Vulkan device enumeration failed with an unknown error");
 	}
 
 	if (instance)
