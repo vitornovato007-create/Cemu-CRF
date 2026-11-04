@@ -421,10 +421,18 @@ namespace LatteDecompiler
 	{
 		auto* src = shaderContext->shaderSource;
 		LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
+		std::array<bool, 128> emittedSemantics{};
 		for (sint32 i = 0; i < psInputTable->count; i++)
 		{
-			if (psInputTable->import[i].semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
+			const uint32 semanticId = psInputTable->import[i].semanticId;
+			if (semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
 				continue;
+			if (emittedSemantics[semanticId])
+			{
+				cemuLog_log(LogType::Force, "Pixel shader {:016x} has duplicate input semantic {}; emitting one GLSL interface declaration", shaderContext->shaderBaseHash, semanticId);
+				continue;
+			}
+			emittedSemantics[semanticId] = true;
 			src->addFmt("layout(location = {}) ", i);
 			if (psInputTable->import[i].isFlat)
 				src->add("flat ");
@@ -523,11 +531,18 @@ namespace LatteDecompiler
 			{
 				// pixel shader with geometry shader
 				LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
+				std::array<bool, 128> emittedG2PImports{};
 				for (sint32 i = 0; i < psInputTable->count; i++)
 				{
 					if (psInputTable->import[i].semanticId > LATTE_ANALYZER_IMPORT_INDEX_PARAM_MAX)
 						continue;
-					uint32 location = psInputTable->import[i].semanticId & 0x7F; // todo - the range above 128 has special meaning?
+					uint32 location = psInputTable->import[i].semanticId & 0x7F;
+					if (emittedG2PImports[location])
+					{
+						cemuLog_log(LogType::Force, "Geometry shader {:016x} has duplicate pixel import semantic {}; emitting one GLSL interface declaration", decompilerContext->shaderBaseHash, location);
+						continue;
+					}
+					emittedG2PImports[location] = true;
 
 					src->addFmt("layout(location = {}) ", location);
 					if (psInputTable->import[i].isFlat)
