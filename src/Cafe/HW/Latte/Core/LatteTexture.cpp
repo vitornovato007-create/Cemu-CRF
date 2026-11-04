@@ -979,6 +979,22 @@ LatteTextureView* LatteTexture_CreateMapping(MPTR physAddr, MPTR physMipAddr, si
 		cemuLog_logDebug(LogType::Force, "LatteTexture_CreateMapping(): Invalid format");
 		return nullptr;
 	}
+
+	// Keep depth classification independent from the GX2 format, but report
+	// the suspicious RGBA8 + depth combination observed in Monitor 2.0.
+	// Limit the diagnostic to avoid flooding the log during texture lookups.
+	if (isDepth && format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_UNORM)
+	{
+		static std::atomic<uint32> s_rgba8DepthMappingWarnings{ 0 };
+		const uint32 warningIndex = s_rgba8DepthMappingWarnings.fetch_add(1, std::memory_order_relaxed);
+		if (warningIndex < 8)
+		{
+			cemuLog_log(LogType::Force,
+				"[TextureClassification] RGBA8 mapping requested as depth: addr={:08x}, mipAddr={:08x}, size={}x{}, depth={}, pitch={}, tileMode={}, dimBase={}, dimView={}",
+				(uint32)physAddr, (uint32)physMipAddr, width, height, depth, pitch,
+				(uint32)tileMode, (uint32)dimBase, (uint32)dimView);
+		}
+	}
 	// note: When creating an existing texture, we only allow mip and slice expansion at the end
 	cemu_assert_debug(depth);
 	
