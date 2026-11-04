@@ -447,6 +447,17 @@ namespace NativeEmulation
         report.append(fmt::format("  Texture objects currently alive: {}\n", lifecycle.currentlyAlive));
         report.append("  Note: constructed/destroyed count LatteTexture object lifetimes, not GPU uploads or successful image allocations.\n\n");
 
+        const auto loadStats = LatteTextureLoader_GetDiagnostics();
+        report.append("Texture decode/upload counters (process lifetime):\n");
+        report.append(fmt::format("  Texture slice load attempts: {}\n", loadStats.sliceLoadAttempts));
+        report.append(fmt::format("  Decoder unavailable: {}\n", loadStats.decoderUnavailable));
+        report.append(fmt::format("  Decoder calls completed: {}\n", loadStats.decodeCalls));
+        report.append(fmt::format("  Decoded output bytes: {}\n", loadStats.decodedBytes));
+        report.append(fmt::format("  Upload-buffer bytes requested: {}\n", loadStats.uploadBufferBytesRequested));
+        report.append(fmt::format("  Upload-buffer allocation failures: {}\n", loadStats.uploadBufferAllocationFailures));
+        report.append(fmt::format("  Renderer texture upload calls: {}\n", loadStats.rendererUploadCalls));
+        report.append(fmt::format("  Bytes passed to renderer texture uploads: {}\n\n", loadStats.rendererUploadBytes));
+
         report.append("Texture cache snapshot (current live cache; not cumulative load totals):\n");
         const auto textures = LatteTexture_QueryCacheInfo();
         if (textures.empty())
