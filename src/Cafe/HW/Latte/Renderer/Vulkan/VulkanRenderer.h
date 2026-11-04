@@ -484,7 +484,6 @@ private:
 
 		struct
 		{
-			bool debug_utils = false; // VK_EXT_DEBUG_UTILS
 		}instanceExtensions;
 
 		struct  
@@ -953,7 +952,6 @@ public:
 	bool GetDisableMultithreadedCompilation() const { return m_featureControl.disableMultithreadedCompilation; }
 	bool UseTFViaSSBO() const { return m_featureControl.mode.useTFEmulationViaSSBO; }
 	bool HasSPRIVRoundingModeRTE32() const { return m_featureControl.shaderFloatControls.shaderRoundingModeRTEFloat32; }
-	bool IsDebugUtilsEnabled() const { return m_featureControl.debugMarkersSupported && m_featureControl.instanceExtensions.debug_utils; }
 
 private:
 
