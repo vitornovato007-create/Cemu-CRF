@@ -1434,9 +1434,6 @@ std::vector<const char*> VulkanRenderer::CheckInstanceExtensionSupport(FeatureCo
 	}
 
 	// check for optional extensions
-	info.instanceExtensions.debug_utils = isExtensionAvailable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	if (info.instanceExtensions.debug_utils)
-		enabledInstanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	return enabledInstanceExtensions;
 }
 
