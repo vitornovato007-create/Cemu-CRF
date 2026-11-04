@@ -4,6 +4,7 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanPipelineStableCache.h"
 #include "Cafe/HW/Latte/Core/LatteShader.h"
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
+#include <array>
 #include <atomic>
 
 namespace
