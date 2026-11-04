@@ -388,6 +388,7 @@ VulkanRenderer::VulkanRenderer()
 
 	// check available instance extensions
 	std::vector<const char*> enabledInstanceExtensions = CheckInstanceExtensionSupport(m_featureControl);
+	s_debugUtilsAvailable.store(m_featureControl.instanceExtensions.debug_utils, std::memory_order_relaxed);
 
 	uint32 apiVersion = VK_API_VERSION_1_1;
 	if (vkEnumerateInstanceVersion(&apiVersion) != VK_SUCCESS)
