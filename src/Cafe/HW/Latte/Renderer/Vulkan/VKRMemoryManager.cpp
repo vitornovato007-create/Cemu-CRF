@@ -387,25 +387,34 @@ VKRBuffer* VKRBuffer::Create(VKR_BUFFER_TYPE bufferType, size_t bufferSize, VkMe
 		return nullptr;
 
 	VKRBuffer* bufferObj = new VKRBuffer(buffer, bufferMemory);
-	// if host visible, then map buffer
-	void* data = nullptr;
+	bufferObj->m_mappedMemory = nullptr;
+	// If host visible, map the allocation and reject the buffer if mapping fails.
 	if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 	{
-		vkMapMemory(VulkanRenderer::GetInstance()->GetLogicalDevice(), bufferMemory, 0, bufferSize, 0, &data);
+		void* data = nullptr;
+		const VkResult mapResult = vkMapMemory(VulkanRenderer::GetInstance()->GetLogicalDevice(), bufferMemory, 0, bufferSize, 0, &data);
+		if (mapResult != VK_SUCCESS || data == nullptr)
+		{
+			cemuLog_log(LogType::Force, "Vulkan VKRBuffer::Create vkMapMemory failed: VkResult={}, type={}, bytes={}, properties={:#x}", (sint32)mapResult, (sint32)bufferType, bufferSize, properties);
+			delete bufferObj;
+			return nullptr;
+		}
+		bufferObj->m_mappedMemory = (uint8*)data;
 		bufferObj->m_requiresFlush = !HAS_FLAG(properties, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	}
-	bufferObj->m_mappedMemory = (uint8*)data;
 	return bufferObj;
 }
 
 VKRBuffer::~VKRBuffer()
 {
-	if (m_mappedMemory)
-		vkUnmapMemory(VulkanRenderer::GetInstance()->GetLogicalDevice(), m_bufferMemory);
-	if (m_bufferMemory != VK_NULL_HANDLE)
-		vkFreeMemory(VulkanRenderer::GetInstance()->GetLogicalDevice(), m_bufferMemory, nullptr);
+	VkDevice logicalDevice = VulkanRenderer::GetInstance()->GetLogicalDevice();
+	if (m_mappedMemory && m_bufferMemory != VK_NULL_HANDLE)
+		vkUnmapMemory(logicalDevice, m_bufferMemory);
+	// Destroy the bound buffer before releasing its VkDeviceMemory allocation.
 	if (m_buffer != VK_NULL_HANDLE)
-		vkDestroyBuffer(VulkanRenderer::GetInstance()->GetLogicalDevice(), m_buffer, nullptr);
+		vkDestroyBuffer(logicalDevice, m_buffer, nullptr);
+	if (m_bufferMemory != VK_NULL_HANDLE)
+		vkFreeMemory(logicalDevice, m_bufferMemory, nullptr);
 }
 
 VkBufferChunkedHeap::~VkBufferChunkedHeap()
