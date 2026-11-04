@@ -211,7 +211,12 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 			}
 			else if( cf_inst23_7 == GPU7_CF_INST_VTX )
 			{
-				LatteGSCopyShaderParser_parseClauseVtx(shaderContext, programData, programSize, addr, count);
+				if (!LatteGSCopyShaderParser_parseClauseVtx(shaderContext, programData, programSize, addr, count))
+				{
+					cemuLog_log(LogType::Force, "Copy shader VTX clause could not be parsed: addr={}, count={}, programBytes={}", addr, count, programSize);
+					delete shaderContext;
+					return nullptr;
+				}
 			}
 			else if (cf_inst23_7 == GPU7_CF_INST_MEM_STREAM0_WRITE ||
 				cf_inst23_7 == GPU7_CF_INST_MEM_STREAM1_WRITE )
