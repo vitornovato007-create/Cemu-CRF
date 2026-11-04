@@ -323,6 +323,7 @@ public:
 
 	// Snapshot of Vulkan texture heaps and upload allocators plus process-lifetime allocation counters.
 	VulkanMemoryDiagnostics GetDiagnostics() const;
+	uint32 GetNonCoherentAtomSize() const { return m_vkr->GetNonCoherentAtomSize(); }
 
 	// overlay info
 	void appendOverlayHeapDebugInfo();
