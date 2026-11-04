@@ -1195,6 +1195,7 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 	switch (format)
 	{
 	case VK_FORMAT_R8G8B8A8_UNORM:
+		rgb_data.clear();
 		for (auto ptr = (uint8*)bufferPtr; ptr < (uint8*)bufferPtr + size; ptr += 4)
 		{
 			rgb_data.emplace_back(*ptr);
@@ -1203,6 +1204,7 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 		}
 		break;
 	case VK_FORMAT_R8G8B8A8_SRGB:
+		rgb_data.clear();
 		for (auto ptr = (uint8*)bufferPtr; ptr < (uint8*)bufferPtr + size; ptr += 4)
 		{
 			rgb_data.emplace_back(SRGBComponentToRGB(*ptr));
