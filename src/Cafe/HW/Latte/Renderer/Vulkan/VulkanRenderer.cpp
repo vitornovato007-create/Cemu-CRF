@@ -1679,8 +1679,7 @@ void VulkanRenderer::CreateCommandBuffers()
 	{
 		VkSemaphoreCreateInfo info = {};
 		info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		if (vkCreateSemaphore(m_logicalDevice, &info, nullptr, &semItr) != VK_SUCCESS)
-			UnrecoverableError("Failed to create semaphore for command buffer");
+		CheckVulkanResultForDiagnostics(vkCreateSemaphore(m_logicalDevice, &info, nullptr, &semItr), "vkCreateSemaphore(command buffer)");
 	}
 }
 
@@ -1718,8 +1717,7 @@ void VulkanRenderer::CreateNullTexture(NullTexture& nullTex, VkImageType imageTy
 	imageInfo.arrayLayers = 1;
 	imageInfo.imageType = imageType;
 	imageInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-	if (vkCreateImage(m_logicalDevice, &imageInfo, nullptr, &nullTex.image) != VK_SUCCESS)
-		UnrecoverableError("Failed to create nullTex image");
+	CheckVulkanResultForDiagnostics(vkCreateImage(m_logicalDevice, &imageInfo, nullptr, &nullTex.image), imageType == VK_IMAGE_TYPE_1D ? "vkCreateImage(null 1D texture)" : "vkCreateImage(null 2D texture)");
 	nullTex.allocation = memoryManager->imageMemoryAllocate(nullTex.image);
 
 	VkClearColorValue clrColor{};
@@ -1742,8 +1740,7 @@ void VulkanRenderer::CreateNullTexture(NullTexture& nullTex, VkImageType imageTy
 	viewInfo.subresourceRange.levelCount = 1;
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
-	if (vkCreateImageView(m_logicalDevice, &viewInfo, nullptr, &nullTex.view) != VK_SUCCESS)
-		UnrecoverableError("Failed to create nullTex image view");
+	CheckVulkanResultForDiagnostics(vkCreateImageView(m_logicalDevice, &viewInfo, nullptr, &nullTex.view), imageType == VK_IMAGE_TYPE_1D ? "vkCreateImageView(null 1D texture)" : "vkCreateImageView(null 2D texture)");
 	// sampler
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -2155,8 +2152,7 @@ void VulkanRenderer::ProcessFinishedCommandBuffers()
 			// not signaled
 			break;
 		}
-		cemuLog_log(LogType::Force, "vkGetFenceStatus returned unexpected error {}", (sint32)fenceStatus);
-		cemu_assert_debug(false);
+		UnrecoverableError(fmt::format("vkGetFenceStatus failed: VkResult={}", (sint32)fenceStatus).c_str());
 	}
 	if (finishedCmdBuffers)
 	{
@@ -2430,8 +2426,7 @@ void VulkanRenderer::swapchain_createDescriptorSetLayout()
 	layoutInfo.bindingCount = std::size(bindings);
 	layoutInfo.pBindings = bindings;
 
-	if (vkCreateDescriptorSetLayout(m_logicalDevice, &layoutInfo, nullptr, &m_swapchainDescriptorSetLayout) != VK_SUCCESS)
-		UnrecoverableError("failed to create descriptor set layout for swapchain");
+	CheckVulkanResultForDiagnostics(vkCreateDescriptorSetLayout(m_logicalDevice, &layoutInfo, nullptr, &m_swapchainDescriptorSetLayout), "vkCreateDescriptorSetLayout(swapchain)");
 }
 
 void VulkanRenderer::GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isDepth, Latte::E_DIM dim, sint32 width, sint32 height, FormatInfoVK* formatInfoOut)
@@ -3364,8 +3359,7 @@ void VulkanRenderer::CreateDescriptorPool()
 	poolInfo.maxSets = 1024 * 256;
 	poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-	if (vkCreateDescriptorPool(m_logicalDevice, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
-		UnrecoverableError("Failed to create descriptor pool!");
+	CheckVulkanResultForDiagnostics(vkCreateDescriptorPool(m_logicalDevice, &poolInfo, nullptr, &m_descriptorPool), "vkCreateDescriptorPool");
 }
 
 VkDescriptorSet VulkanRenderer::backbufferBlit_createDescriptorSet(VkDescriptorSetLayout descriptor_set_layout, LatteTextureViewVk* texViewVk, bool useLinearTexFilter)
@@ -4397,8 +4391,7 @@ VKRObjectFramebuffer::VKRObjectFramebuffer(VKRObjectRenderPass* renderPass, std:
 	createInfo.layers = 1;
 	createInfo.width = size.x;
 	createInfo.height = size.y;
-	if (vkCreateFramebuffer(VulkanRenderer::GetInstance()->GetLogicalDevice(), &createInfo, nullptr, &m_frameBuffer) != VK_SUCCESS)
-		throw std::runtime_error("failed to create framebuffer!");
+	CheckVulkanResultForDiagnostics(vkCreateFramebuffer(VulkanRenderer::GetInstance()->GetLogicalDevice(), &createInfo, nullptr, &m_frameBuffer), fmt::format("vkCreateFramebuffer ({}x{}, attachments={})", size.x, size.y, attachments.size()).c_str());
 
 	// track refs
 	this->addRef(renderPass);
