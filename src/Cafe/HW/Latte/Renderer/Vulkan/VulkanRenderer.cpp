@@ -1267,7 +1267,7 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 	bool formatValid = true;
 
 	std::vector<uint8> rgb_data;
-	rgb_data.resize(3 * width * height);
+	rgb_data.resize((size_t)3 * (size_t)width * (size_t)height);
 
 	switch (format)
 	{
