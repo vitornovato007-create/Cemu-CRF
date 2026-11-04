@@ -400,10 +400,17 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		std::vector<uint8> cacheFileData;
 		if (s_spirvCache->GetFile({ h1, h2 }, cacheFileData))
 		{
-			// generate shader from cached SPIR-V buffer
-			CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
-			FinishCompilation();
-			return;
+			if (cacheFileData.empty() || (cacheFileData.size() % sizeof(uint32)) != 0)
+			{
+				cemuLog_log(LogType::Force, "Ignoring malformed cached SPIR-V: shader={:016x}_{:016x}, cacheBytes={}", m_baseHash, m_auxHash, cacheFileData.size());
+			}
+			else
+			{
+				// generate shader from cached SPIR-V buffer
+				CreateVkShaderModule(std::span<uint32>((uint32*)cacheFileData.data(), cacheFileData.size() / sizeof(uint32)));
+				FinishCompilation();
+				return;
+			}
 		}
 	}
 
