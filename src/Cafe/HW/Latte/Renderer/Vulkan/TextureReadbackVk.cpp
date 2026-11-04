@@ -1,6 +1,7 @@
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanTextureReadback.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/LatteTextureVk.h"
+#include <limits>
 
 LatteTextureReadbackInfoVk::LatteTextureReadbackInfoVk(VkDevice device, LatteTextureView* textureView)
 	: LatteTextureReadbackInfo(textureView), m_device(device)
@@ -44,33 +45,43 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 	const auto* baseTexture = (LatteTextureVk*)textureView->baseTexture;
 	// handle format
 	const auto textureFormat = baseTexture->GetFormat();
+	auto checkedLinearSize = [baseTexture](uint32 bytesPerPixel) -> uint32 {
+		const uint64 pixelCount = (uint64)baseTexture->width * (uint64)baseTexture->height;
+		const uint64 byteCount = pixelCount * bytesPerPixel;
+		if (pixelCount == 0 || byteCount > std::numeric_limits<uint32>::max())
+		{
+			cemuLog_log(LogType::Force, "Texture readback size is invalid or exceeds 32-bit limits: resolution={}x{}, bytesPerPixel={}", baseTexture->width, baseTexture->height, bytesPerPixel);
+			return 0;
+		}
+		return (uint32)byteCount;
+	};
 	if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_UNORM)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R8G8B8A8_UNORM);
-		return baseTexture->width * baseTexture->height * 4;
+		return checkedLinearSize(4);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R8_UNORM )
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R8_UNORM);
-		return baseTexture->width * baseTexture->height * 1;
+		return checkedLinearSize(1);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_SRGB)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R8G8B8A8_SRGB);
-		return baseTexture->width * baseTexture->height * 4;
+		return checkedLinearSize(4);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R32_G32_B32_A32_FLOAT)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R32G32B32A32_SFLOAT);
-		return baseTexture->width * baseTexture->height * 16;
+		return checkedLinearSize(1)6;
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R32_FLOAT)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R32_SFLOAT || textureFormat == VK_FORMAT_D32_SFLOAT);
 		if (baseTexture->isDepth)
-			return baseTexture->width * baseTexture->height * 4;
+			return checkedLinearSize(4);
 		else
-			return baseTexture->width * baseTexture->height * 4;		
+			return checkedLinearSize(4);		
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R16_UNORM)
 	{
@@ -78,38 +89,38 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 		if (baseTexture->isDepth)
 		{
 			cemu_assert_debug(false);
-			return baseTexture->width * baseTexture->height * 2;
+			return checkedLinearSize(2);
 		}
 		else
 		{
-			return baseTexture->width * baseTexture->height * 2;
+			return checkedLinearSize(2);
 		}
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R16_G16_B16_A16_FLOAT)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R16G16B16A16_SFLOAT);
-		return baseTexture->width * baseTexture->height * 8;
+		return checkedLinearSize(8);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_UNORM)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R8G8_UNORM);
-		return baseTexture->width * baseTexture->height * 2;
+		return checkedLinearSize(2);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R16_G16_B16_A16_UNORM)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_R16G16B16A16_UNORM);
-		return baseTexture->width * baseTexture->height * 8;
+		return checkedLinearSize(8);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::D24_S8_UNORM)
 	{
 		cemu_assert(textureFormat == VK_FORMAT_D24_UNORM_S8_UINT);
 		// todo - if driver does not support VK_FORMAT_D24_UNORM_S8_UINT this is represented as VK_FORMAT_D32_SFLOAT_S8_UINT which is 8 bytes
-		return baseTexture->width * baseTexture->height * 4;
+		return checkedLinearSize(4);
 	}
 	else if (textureView->format == Latte::E_GX2SURFFMT::R5_G6_B5_UNORM )
 	{
 		if(textureFormat == VK_FORMAT_R5G6B5_UNORM_PACK16){
-			return baseTexture->width * baseTexture->height * 2;
+			return checkedLinearSize(2);
 		}	
 		return 0;
 	}
