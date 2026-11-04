@@ -545,7 +545,7 @@ namespace NativeEmulation
             report.append(fmt::format("Debug messenger VkResult: {}\n\n", validation.debugMessengerResult));
         else
             report.append("\n");
-        if (auto* renderer = VulkanRenderer::GetInstance())
+        if (auto* renderer = g_renderer ? dynamic_cast<VulkanRenderer*>(g_renderer.get()) : nullptr)
         {
             if (auto* memoryManager = renderer->GetMemoryManager())
             {
