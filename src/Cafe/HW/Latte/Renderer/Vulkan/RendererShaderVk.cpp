@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstring>
 #include <charconv>
 #include <vector>
 #include <glslang/Public/ShaderLang.h>
@@ -400,9 +401,12 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 		std::vector<uint8> cacheFileData;
 		if (s_spirvCache->GetFile({ h1, h2 }, cacheFileData))
 		{
-			if (cacheFileData.empty() || (cacheFileData.size() % sizeof(uint32)) != 0)
+			uint32 cachedMagic = 0;
+			if (cacheFileData.size() >= 5 * sizeof(uint32) && (cacheFileData.size() % sizeof(uint32)) == 0)
+				std::memcpy(&cachedMagic, cacheFileData.data(), sizeof(cachedMagic));
+			if (cacheFileData.size() < 5 * sizeof(uint32) || (cacheFileData.size() % sizeof(uint32)) != 0 || cachedMagic != 0x07230203u)
 			{
-				cemuLog_log(LogType::Force, "Ignoring malformed cached SPIR-V: shader={:016x}_{:016x}, cacheBytes={}", m_baseHash, m_auxHash, cacheFileData.size());
+				cemuLog_log(LogType::Force, "Ignoring malformed cached SPIR-V: shader={:016x}_{:016x}, cacheBytes={}, magic=0x{:08x}", m_baseHash, m_auxHash, cacheFileData.size(), cachedMagic);
 			}
 			else
 			{
