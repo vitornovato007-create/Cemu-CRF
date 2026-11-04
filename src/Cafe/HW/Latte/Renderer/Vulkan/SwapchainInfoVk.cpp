@@ -243,15 +243,17 @@ bool SwapchainInfoVk::AcquireImage()
 		m_shouldRecreate = true;
 	if (result == VK_TIMEOUT)
 	{
+		cemuLog_log(LogType::Force, "vkAcquireNextImageKHR timed out: swapchain={}, timeoutNs={}, acquireIndex={}, imageCount={}", (void*)m_swapchain, 1'000'000'000ull, m_acquireIndex, m_swapchainImages.size());
 		swapchainImageIndex = -1;
 		return false;
 	}
 
 	if (result < 0)
 	{
+		cemuLog_log(LogType::Force, "vkAcquireNextImageKHR failed: VkResult={}, swapchain={}, acquireIndex={}, imageCount={}", (sint32)result, (void*)m_swapchain, m_acquireIndex, m_swapchainImages.size());
 		swapchainImageIndex = -1;
 		if (result != VK_ERROR_OUT_OF_DATE_KHR)
-			throw std::runtime_error(fmt::format("Failed to acquire next image: {}", result));
+			throw std::runtime_error(fmt::format("Failed to acquire next swapchain image: VkResult={}", (sint32)result));
 		return false;
 	}
 	m_currentSemaphore = acquireSemaphore;
