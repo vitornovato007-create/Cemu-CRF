@@ -579,13 +579,13 @@ void RendererShaderVk::PreponeCompilation(bool isRenderThread)
 
 bool RendererShaderVk::IsCompiled()
 {
-	return m_compilationState.hasState(COMPILATION_STATE::DONE) && m_shader_module != VK_NULL_HANDLE;
+	return m_compilationState.hasState(COMPILATION_STATE::DONE);
 };
 
 bool RendererShaderVk::WaitForCompiled()
 {
 	m_compilationState.waitUntilValue(COMPILATION_STATE::DONE);
-	return m_shader_module != VK_NULL_HANDLE;
+	return true;
 }
 
 void RendererShaderVk::ShaderCacheLoading_begin(uint64 cacheTitleId)
