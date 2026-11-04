@@ -515,9 +515,10 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 	bufferInfo.usage = usage;
 	bufferInfo.size = size;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	if (vkCreateBuffer(m_vkr->GetLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
+	const VkResult createResult = vkCreateBuffer(m_vkr->GetLogicalDevice(), &bufferInfo, nullptr, &buffer);
+	if (createResult != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Failed to create buffer (CreateBuffer)");
+		cemuLog_log(LogType::Force, "Vulkan vkCreateBuffer failed: VkResult={}, size={}, usage={:#x}, properties={:#x}", (sint32)createResult, size, usage, properties);
 		return recordFailure();
 	}
 
@@ -529,12 +530,17 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 	allocInfo.allocationSize = memRequirements.size;
 	if (!FindMemoryType(memRequirements.memoryTypeBits, properties, allocInfo.memoryTypeIndex))
 	{
+		cemuLog_log(LogType::Force, "Vulkan buffer has no compatible memory type: size={}, memoryTypeBits={:#x}, requestedProperties={:#x}", memRequirements.size, memRequirements.memoryTypeBits, properties);
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
+		buffer = VK_NULL_HANDLE;
 		return recordFailure();
 	}
-	if (vkAllocateMemory(m_vkr->GetLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
+	const VkResult allocationResult = vkAllocateMemory(m_vkr->GetLogicalDevice(), &allocInfo, nullptr, &bufferMemory);
+	if (allocationResult != VK_SUCCESS)
 	{
+		cemuLog_log(LogType::Force, "Vulkan buffer memory allocation failed: VkResult={}, bytes={}, memoryType={}", (sint32)allocationResult, allocInfo.allocationSize, allocInfo.memoryTypeIndex);
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
+		buffer = VK_NULL_HANDLE;
 		return recordFailure();
 	}
 	VkResult bindResult = vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0);
@@ -571,9 +577,10 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 
 	bufferInfo.pNext = &emb;
 
-	if (vkCreateBuffer(m_vkr->GetLogicalDevice(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
+	const VkResult createResult = vkCreateBuffer(m_vkr->GetLogicalDevice(), &bufferInfo, nullptr, &buffer);
+	if (createResult != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Failed to create buffer (CreateBuffer)");
+		cemuLog_log(LogType::Force, "Vulkan host-pointer vkCreateBuffer failed: VkResult={}, size={}, usage={:#x}", (sint32)createResult, size, usage);
 		return recordFailure();
 	}
 
@@ -596,12 +603,17 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 
 	if (!FindMemoryType(memRequirements.memoryTypeBits, properties, allocInfo.memoryTypeIndex))
 	{
+		cemuLog_log(LogType::Force, "Vulkan host-pointer buffer has no compatible memory type: size={}, memoryTypeBits={:#x}, requestedProperties={:#x}", memRequirements.size, memRequirements.memoryTypeBits, properties);
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
+		buffer = VK_NULL_HANDLE;
 		return recordFailure();
 	}
-	if (vkAllocateMemory(m_vkr->GetLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
+	const VkResult allocationResult = vkAllocateMemory(m_vkr->GetLogicalDevice(), &allocInfo, nullptr, &bufferMemory);
+	if (allocationResult != VK_SUCCESS)
 	{
+		cemuLog_log(LogType::Force, "Vulkan host-pointer buffer memory allocation failed: VkResult={}, bytes={}, memoryType={}", (sint32)allocationResult, allocInfo.allocationSize, allocInfo.memoryTypeIndex);
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
+		buffer = VK_NULL_HANDLE;
 		return recordFailure();
 	}
 	VkResult bindResult = vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0);
