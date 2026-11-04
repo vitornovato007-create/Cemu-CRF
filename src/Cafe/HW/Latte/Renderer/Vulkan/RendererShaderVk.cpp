@@ -66,6 +66,32 @@ static void LogShaderSourceErrorContext(std::string_view source, std::string_vie
 		cemuLog_log(LogType::Force, "{:04d}: {}", line, lines[line - 1]);
 }
 
+// Preserve a bounded copy of the exact preprocessed GLSL for failed shaders.
+// This is emitted only on failure, so normal shader compilation stays quiet.
+static void LogShaderSourceBounded(std::string_view source, uint64 baseHash, uint64 auxHash)
+{
+	constexpr size_t maxSourceBytes = 24 * 1024;
+	constexpr size_t maxLineBytes = 1500;
+	const size_t bytesToLog = std::min(source.size(), maxSourceBytes);
+	cemuLog_log(LogType::Force, "GLSL diagnostic source {:016x}_{:016x}: {} of {} bytes{}",
+		baseHash, auxHash, bytesToLog, source.size(), source.size() > bytesToLog ? " (truncated)" : "");
+
+	size_t offset = 0;
+	size_t lineNumber = 1;
+	while (offset < bytesToLog)
+	{
+		size_t next = source.find('\n', offset);
+		if (next == std::string_view::npos || next > bytesToLog)
+			next = bytesToLog;
+		std::string_view line = source.substr(offset, next - offset);
+		if (line.size() > maxLineBytes)
+			line = line.substr(0, maxLineBytes);
+		cemuLog_log(LogType::Force, "GLSL {:04d}: {}", lineNumber, line);
+		offset = next + 1;
+		++lineNumber;
+	}
+}
+
 consteval TBuiltInResource GetDefaultBuiltInResource()
 {
 	TBuiltInResource defaultResource = {};
@@ -403,6 +429,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	{
 		cemuLog_log(LogType::Force, fmt::format("GLSL parsing failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Shader.getInfoLog()));
 		LogShaderSourceErrorContext(PreprocessedGLSL, Shader.getInfoLog(), m_baseHash, m_auxHash);
+		LogShaderSourceBounded(PreprocessedGLSL, m_baseHash, m_auxHash);
 		// A malformed guest shader must not abort the entire emulator in Debug builds.
 		FinishCompilation();
 		return;
@@ -414,6 +441,7 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	if (!Program.link(messagesParseLink))
 	{
 		cemuLog_log(LogType::Force, fmt::format("GLSL linking failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Program.getInfoLog()));
+		LogShaderSourceBounded(PreprocessedGLSL, m_baseHash, m_auxHash);
 		// Treat a failed shader as unavailable instead of terminating emulation.
 		FinishCompilation();
 		return;
