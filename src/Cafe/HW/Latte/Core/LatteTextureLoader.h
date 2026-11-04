@@ -2116,7 +2116,7 @@ public:
 				sint32 blockSizeY = (std::min)(4, textureLoader->height - y);
 				// decode 4x4 pixels at once
 				float rBlock[4 * 4 * 1];
-				fn(blockData, rBlock)
+				fn(blockData, rBlock);
 
 				for (sint32 py = 0; py < blockSizeY; py++)
 				{
@@ -2138,7 +2138,7 @@ public:
 	void decodePixelToRGBA(uint8* blockData, uint8* outputPixel, uint8 blockOffsetX, uint8 blockOffsetY) override
 	{
 		float rBlock[4 * 4 * 1];
-		fn(blockData, rBlock)
+		fn(blockData, rBlock);
 		float red = rBlock[(blockOffsetX + blockOffsetY * 4) * 1 + 0];
 		*(outputPixel + 0) = signedOutput ? (uint8)((0.5f + red * 0.5f) * 255.0f) : (uint8)(red * 255.0f);
 		*(outputPixel + 1) = 0;
