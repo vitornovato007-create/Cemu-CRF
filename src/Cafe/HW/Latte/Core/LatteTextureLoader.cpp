@@ -148,11 +148,14 @@ void LatteTextureLoader_begin(LatteTextureLoaderCtx* textureLoader, uint32 slice
 	textureLoader->height = std::max(textureLoader->height, 1);
 
 	textureLoader->pitch = surfaceInfo.pitch;
-	// calculate start address
+	// calculate start address without performing pointer arithmetic on an invalid guest address
 	if (level == 0)
 		textureLoader->inputData = (uint8*)memory_getPointerFromPhysicalOffset(physImagePtr);
 	else
-		textureLoader->inputData = (uint8*)memory_getPointerFromPhysicalOffset(physMipPtr) + textureLoader->levelOffset;
+	{
+		auto* mipBase = (uint8*)memory_getPointerFromPhysicalOffset(physMipPtr);
+		textureLoader->inputData = mipBase ? mipBase + textureLoader->levelOffset : nullptr;
+	}
 
 	SetupCachedSurfaceAddrInfo(&textureLoader->computeAddrInfo, textureLoader->sliceIndex, 0, textureLoader->bpp, textureLoader->pitch, surfaceInfo.height, depth, 1 * 1, textureLoader->tileMode, false, textureLoader->pipeSwizzle, textureLoader->bankSwizzle);
 }
