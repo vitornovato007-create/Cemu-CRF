@@ -671,7 +671,18 @@ VulkanRenderer::VulkanRenderer()
 	// extension info
 	// cemuLog_log(LogType::Force, "VK_KHR_dynamic_rendering: {}", m_featureControl.deviceExtensions.dynamic_rendering?"supported":"not supported");
 
-	void* bufferPtr;
+	auto mapBufferOrThrow = [&](VkDeviceMemory memory, const char* label) -> void*
+	{
+		void* mapped = nullptr;
+		const VkResult mapResult = vkMapMemory(m_logicalDevice, memory, 0, VK_WHOLE_SIZE, 0, &mapped);
+		if (mapResult != VK_SUCCESS || mapped == nullptr)
+		{
+			cemuLog_log(LogType::Force, "Vulkan: failed to map {} memory: VkResult={}", label, (sint32)mapResult);
+			throw std::runtime_error(fmt::format("Failed to map Vulkan {} memory: VkResult={}", label, (sint32)mapResult));
+		}
+		return mapped;
+	};
+
 	// init ringbuffer for uniform vars
 	m_uniformVarBufferMemoryIsCoherent = false;
 	if (memoryManager->CreateBuffer(UNIFORMVAR_RINGBUFFER_SIZE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_uniformVarBuffer, m_uniformVarBufferMemory))
@@ -682,37 +693,29 @@ VulkanRenderer::VulkanRenderer()
 		m_uniformVarBufferMemoryIsCoherent = true;
 	else if (memoryManager->CreateBuffer(UNIFORMVAR_RINGBUFFER_SIZE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_uniformVarBuffer, m_uniformVarBufferMemory))
 		m_uniformVarBufferMemoryIsCoherent = true;
-	else
-	{
-		memoryManager->CreateBuffer(UNIFORMVAR_RINGBUFFER_SIZE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, m_uniformVarBuffer, m_uniformVarBufferMemory);
-	}
+	else if (!memoryManager->CreateBuffer(UNIFORMVAR_RINGBUFFER_SIZE, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, m_uniformVarBuffer, m_uniformVarBufferMemory))
+		throw std::runtime_error("Unable to allocate Vulkan uniform ring buffer");
 
 	if (!m_uniformVarBufferMemoryIsCoherent)
 		cemuLog_log(LogType::Force, "[Vulkan-Info] Using non-coherent memory for uniform data");
-	bufferPtr = nullptr;
-	vkMapMemory(m_logicalDevice, m_uniformVarBufferMemory, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
-	m_uniformVarBufferPtr = (uint8*)bufferPtr;
+	m_uniformVarBufferPtr = (uint8*)mapBufferOrThrow(m_uniformVarBufferMemory, "uniform ring buffer");
 
 	// texture readback buffer
-	if (!memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory))
-	{
-		memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory);
-	}
-	bufferPtr = nullptr;
-	vkMapMemory(m_logicalDevice, m_textureReadbackBufferMemory, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
-	m_textureReadbackBufferPtr = (uint8*)bufferPtr;
+	if (!memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory) &&
+		!memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory))
+		throw std::runtime_error("Unable to allocate Vulkan texture readback buffer");
+	m_textureReadbackBufferPtr = (uint8*)mapBufferOrThrow(m_textureReadbackBufferMemory, "texture readback buffer");
 
 	// transform feedback ringbuffer
-	memoryManager->CreateBuffer(LatteStreamout_GetRingBufferSize(), VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | (m_featureControl.mode.useTFEmulationViaSSBO ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0), 0, m_xfbRingBuffer, m_xfbRingBufferMemory);
+	const uint32 xfbRingBufferSize = LatteStreamout_GetRingBufferSize();
+	if (xfbRingBufferSize != 0 && !memoryManager->CreateBuffer(xfbRingBufferSize, VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_BUFFER_BIT_EXT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | (m_featureControl.mode.useTFEmulationViaSSBO ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : 0), 0, m_xfbRingBuffer, m_xfbRingBufferMemory))
+		throw std::runtime_error("Unable to allocate Vulkan transform-feedback ring buffer");
 
 	// occlusion query result buffer
-	if (!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults))
-	{
-		memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults);
-	}
-	bufferPtr = nullptr;
-	vkMapMemory(m_logicalDevice, m_occlusionQueries.memoryQueryResults, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
-	m_occlusionQueries.ptrQueryResults = (uint64*)bufferPtr;
+	if (!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults) &&
+		!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults))
+		throw std::runtime_error("Unable to allocate Vulkan occlusion query result buffer");
+	m_occlusionQueries.ptrQueryResults = (uint64*)mapBufferOrThrow(m_occlusionQueries.memoryQueryResults, "occlusion query result buffer");
 
 	for (sint32 i = 0; i < OCCLUSION_QUERY_POOL_SIZE; i++)
 		m_occlusionQueries.list_availableQueryIndices.emplace_back(i);
