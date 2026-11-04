@@ -491,6 +491,12 @@ namespace NativeEmulation
         }
         report.append("\n");
 
+        const auto viewCache = LatteTextureViewLookupCache_GetDiagnostics();
+        report.append("Texture view lookup cache diagnostics (process-lifetime counters):\n");
+        report.append(fmt::format("  Lookup attempts/hits/misses: {}/{}/{}\n", viewCache.lookupAttempts, viewCache.lookupHits, viewCache.lookupMisses));
+        report.append(fmt::format("  Candidate tile-mode mismatches: {}\n", viewCache.tileModeMismatchCandidates));
+        report.append(fmt::format("  Candidate depth-type mismatches: {}\n\n", viewCache.depthTypeMismatchCandidates));
+
         report.append("Texture cache snapshot (current live cache; not cumulative load totals):\n");
         const auto textures = LatteTexture_QueryCacheInfo();
         if (textures.empty())
