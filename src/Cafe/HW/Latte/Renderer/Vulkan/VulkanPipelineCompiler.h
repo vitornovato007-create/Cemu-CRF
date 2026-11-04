@@ -1,5 +1,22 @@
 #pragma once
 
+struct VulkanPipelineDiagnostics
+{
+	uint64 descriptorLayoutAttempts{};
+	uint64 descriptorLayoutSuccesses{};
+	uint64 descriptorLayoutFailures{};
+	uint64 pipelineLayoutAttempts{};
+	uint64 pipelineLayoutSuccesses{};
+	uint64 pipelineLayoutFailures{};
+	uint64 graphicsPipelineAttempts{};
+	uint64 graphicsPipelineSuccesses{};
+	uint64 graphicsPipelineFailures{};
+	uint64 pipelineCompileRequired{};
+	uint64 outOfDeviceMemoryRetries{};
+};
+
+VulkanPipelineDiagnostics VulkanPipelineCompiler_GetDiagnostics();
+
 class PipelineCompiler : public VKRMoveableRefCounter
 {
 private:
