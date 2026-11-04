@@ -452,6 +452,7 @@ namespace NativeEmulation
         report.append("Texture decode/upload counters (process lifetime):\n");
         report.append(fmt::format("  Texture slice load attempts: {}\n", loadStats.sliceLoadAttempts));
         report.append(fmt::format("  Decoder unavailable: {}\n", loadStats.decoderUnavailable));
+        report.append(fmt::format("  Invalid guest-memory texture addresses: {}\n", loadStats.invalidInputAddress));
         report.append(fmt::format("  Decoder returned invalid output size: {}\n", loadStats.invalidDecodedSize));
         report.append(fmt::format("  Decoder calls completed: {}\n", loadStats.decodeCalls));
         report.append(fmt::format("  Decoded output bytes: {}\n", loadStats.decodedBytes));
@@ -483,6 +484,9 @@ namespace NativeEmulation
                     break;
                 case LatteTextureDiagnosticEventType::InvalidDecodedSize:
                     eventName = "decoder returned invalid output size";
+                    break;
+                case LatteTextureDiagnosticEventType::InvalidInputAddress:
+                    eventName = "invalid guest-memory input address";
                     break;
                 }
                 report.append(fmt::format("  {}: GX2=0x{:04x}, {}x{}, slice={}, mip={}, depth={}, bytes={}\n",
