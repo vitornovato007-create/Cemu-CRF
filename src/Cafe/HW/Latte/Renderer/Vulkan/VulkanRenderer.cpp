@@ -1198,8 +1198,16 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 
 	vkCmdCopyImageToBuffer(getCurrentCommandBuffer(), dumpImage, VK_IMAGE_LAYOUT_GENERAL, buffer, 1, &region);
 
-	SubmitCommandBuffer();
-	WaitCommandBufferFinished(GetCurrentCommandBufferId());
+	try
+	{
+		SubmitCommandBuffer();
+		WaitCommandBufferFinished(GetCurrentCommandBufferId());
+	}
+	catch (...)
+	{
+		cleanupScreenshotResources();
+		throw;
+	}
 
 	bool formatValid = true;
 
