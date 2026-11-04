@@ -9,6 +9,11 @@
 
 struct VulkanShaderDiagnostics
 {
+	uint64 preprocessFailures{};
+	uint64 parseFailures{};
+	uint64 linkFailures{};
+	uint64 interfaceMappingFailures{};
+	uint64 spirvGenerationFailures{};
 	uint64 moduleCreateAttempts{};
 	uint64 moduleCreateSuccesses{};
 	uint64 moduleCreateFailures{};
