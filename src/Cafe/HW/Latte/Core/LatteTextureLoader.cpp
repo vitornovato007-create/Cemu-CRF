@@ -3,6 +3,34 @@
 #include "config/ActiveSettings.h"
 #include "Cafe/CafeSystem.h"
 
+#include <atomic>
+
+namespace
+{
+	std::atomic<uint64> s_textureSliceLoadAttempts{ 0 };
+	std::atomic<uint64> s_textureDecoderUnavailable{ 0 };
+	std::atomic<uint64> s_textureDecodeCalls{ 0 };
+	std::atomic<uint64> s_textureDecodedBytes{ 0 };
+	std::atomic<uint64> s_textureUploadBufferBytesRequested{ 0 };
+	std::atomic<uint64> s_textureUploadBufferAllocationFailures{ 0 };
+	std::atomic<uint64> s_textureRendererUploadCalls{ 0 };
+	std::atomic<uint64> s_textureRendererUploadBytes{ 0 };
+}
+
+LatteTextureLoadDiagnostics LatteTextureLoader_GetDiagnostics()
+{
+	LatteTextureLoadDiagnostics result;
+	result.sliceLoadAttempts = s_textureSliceLoadAttempts.load(std::memory_order_relaxed);
+	result.decoderUnavailable = s_textureDecoderUnavailable.load(std::memory_order_relaxed);
+	result.decodeCalls = s_textureDecodeCalls.load(std::memory_order_relaxed);
+	result.decodedBytes = s_textureDecodedBytes.load(std::memory_order_relaxed);
+	result.uploadBufferBytesRequested = s_textureUploadBufferBytesRequested.load(std::memory_order_relaxed);
+	result.uploadBufferAllocationFailures = s_textureUploadBufferAllocationFailures.load(std::memory_order_relaxed);
+	result.rendererUploadCalls = s_textureRendererUploadCalls.load(std::memory_order_relaxed);
+	result.rendererUploadBytes = s_textureRendererUploadBytes.load(std::memory_order_relaxed);
+	return result;
+}
+
 //#define BENCHMARK_TEXTURE_DECODING		// if defined, time it takes to decode textures will be measured and logged to log.txt
 
 #ifdef BENCHMARK_TEXTURE_DECODING
@@ -641,11 +669,14 @@ void LatteTextureLoader_loadTextureDataIntoSlice(LatteTexture* hostTexture, sint
 	else
 	{
 		g_renderer->texture_loadSlice(hostTexture, width, height, depth, pixelData, sliceIndex, mipIndex, compressedImageSize);
+		s_textureRendererUploadCalls.fetch_add(1, std::memory_order_relaxed);
+		s_textureRendererUploadBytes.fetch_add(compressedImageSize, std::memory_order_relaxed);
 	}
 }
 
 void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIndex, uint32 mipIndex, MPTR physImagePtr, MPTR physMipPtr, Latte::E_DIM dim, uint32 width, uint32 height, uint32 depth, uint32 mipLevels, uint32 pitch, Latte::E_HWTILEMODE tileMode, uint32 swizzle, bool dumpTex)
 {
+	s_textureSliceLoadAttempts.fetch_add(1, std::memory_order_relaxed);
 	LatteTextureLoaderCtx textureLoader = { 0 };
 	
 	Latte::E_GX2SURFFMT format = tex->format;
@@ -680,15 +711,27 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	}
 
 	if (texDecoder == nullptr)
+	{
+		s_textureDecoderUnavailable.fetch_add(1, std::memory_order_relaxed);
 		return;
+	}
 
 	textureLoader.decodedTexelCountX = texDecoder->getTexelCountX(&textureLoader);
 	textureLoader.decodedTexelCountY = texDecoder->getTexelCountY(&textureLoader);
 
 	// allocate memory for decoded texture
 	uint32 imageSize = texDecoder->calculateImageSize(&textureLoader);
+	s_textureUploadBufferBytesRequested.fetch_add(imageSize, std::memory_order_relaxed);
 
 	uint8* pixelData = (uint8*)g_renderer->texture_acquireTextureUploadBuffer(imageSize);
+	if (pixelData == nullptr)
+	{
+		s_textureUploadBufferAllocationFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Texture upload buffer allocation failed: format=0x{:04x}, {}x{}, slice={}, mip={}, bytes={}", (uint32)format, width, height, sliceIndex, mipIndex, imageSize);
+		if (textureLoader.dumpRGBA)
+			free(textureLoader.dumpRGBA);
+		return;
+	}
 	// decode texture (if data is required)
 #ifdef BENCHMARK_TEXTURE_DECODING
 	LARGE_INTEGER benchmark_begin;
@@ -699,6 +742,8 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	if (tex->overwriteInfo.hasFormatOverwrite == false && tex->overwriteInfo.hasResolutionOverwrite == false)
 	{
 		texDecoder->decode(&textureLoader, pixelData);
+		s_textureDecodeCalls.fetch_add(1, std::memory_order_relaxed);
+		s_textureDecodedBytes.fetch_add(imageSize, std::memory_order_relaxed);
 	}
 #ifdef BENCHMARK_TEXTURE_DECODING
 	QueryPerformanceCounter(&benchmark_end);
