@@ -115,9 +115,10 @@ RendererShaderVk* rectsEmulationGS_generate(LatteDecompilerShader* vertexShader,
 	auto parameterMask = vertexShader->outputParameterMask;
 	for (sint32 f = 0; f < 2; f++)
 	{
-		// Multiple GX2 export slots can resolve to the same PS import semantic.
-		// Emit each geometry-stage interface location only once per direction.
-		std::array<bool, 32> emittedLocations{};
+		// The same semantic may be exported through multiple GX2 slots, but
+		// two different semantics cannot safely share one GLSL location.
+		std::array<sint32, 32> semanticAtLocation{};
+		semanticAtLocation.fill(-1);
 		for (uint32 i = 0; i < 32; i++)
 		{
 			if ((parameterMask & (1 << i)) == 0)
@@ -129,14 +130,23 @@ RendererShaderVk* rectsEmulationGS_generate(LatteDecompilerShader* vertexShader,
 			if (psImport == nullptr)
 				continue;
 			const sint32 location = psInputTable->getPSImportLocationBySemanticId(vsSemanticId);
-			if (location < 0 || location >= (sint32)emittedLocations.size())
+			if (location < 0 || location >= (sint32)semanticAtLocation.size())
 				continue;
-			if (emittedLocations[location])
+			if (semanticAtLocation[location] >= 0)
 			{
-				cemuLog_log(LogType::Force, "Rect-emulation geometry shader {:016x} has duplicate VS output semantic {} at PS interface location {}; emitting one declaration", vertexShader->baseHash, vsSemanticId, location);
+				if (semanticAtLocation[location] != vsSemanticId)
+				{
+					cemuLog_log(LogType::Force,
+						"Rect-emulation geometry shader {:016x} has conflicting semantics {} and {} at PS interface location {}; refusing invalid GLSL interface",
+						vertexShader->baseHash, semanticAtLocation[location], vsSemanticId, location);
+					return nullptr;
+				}
+				cemuLog_log(LogType::Force,
+					"Rect-emulation geometry shader {:016x} repeats semantic {} at PS interface location {}; emitting one declaration",
+					vertexShader->baseHash, vsSemanticId, location);
 				continue;
 			}
-			emittedLocations[location] = true;
+			semanticAtLocation[location] = vsSemanticId;
 
 			gsSrc.append(fmt::format("layout(location = {}) ", location));
 			if (psImport->isFlat)
@@ -956,6 +966,11 @@ bool PipelineCompiler::InitFromCurrentGPUState(PipelineInfo* pipelineInfo, const
 		cemu_assert(m_vkGeometryShader == nullptr); // todo - handle cases where the game already provides a GS
 		m_rectEmulationGS = rectsEmulationGS_generate(pipelineInfo->vertexShader, latteRegister);
 		pipelineInfo->rectEmulationGS = m_rectEmulationGS;
+		if (!m_rectEmulationGS)
+		{
+			cemuLog_log(LogType::Force, "Failed to generate rectangle-emulation geometry shader due to an ambiguous vertex/pixel interface");
+			return false;
+		}
 	}
 
 	// ##########################################################################################################################################
