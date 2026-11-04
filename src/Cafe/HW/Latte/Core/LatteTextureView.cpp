@@ -55,6 +55,7 @@ struct LatteTexViewLookupDesc
 		this->numSlice = view->numSlice;
 		this->format = view->format;
 		this->dim = view->dim;
+		this->tileMode = view->baseTexture->tileMode;
 		this->isDepth = view->baseTexture->isDepth;
 	}
 
@@ -87,6 +88,7 @@ struct LatteTexViewLookupDesc
 	sint32 numSlice;
 	Latte::E_GX2SURFFMT format;
 	Latte::E_DIM dim;
+	Latte::E_HWTILEMODE tileMode;
 	bool isDepth;
 	// associated view
 	LatteTextureView* view;
@@ -143,14 +145,13 @@ void LatteTextureViewLookupCache::RemoveAll(LatteTextureView* view)
 	}
 }
 
-LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim)
+LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, Latte::E_HWTILEMODE tileMode)
 {
-	// todo - add tileMode param to this and the other lookup functions?
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.format == format && it.dim == dim && !it.isDepth &&
+		if (it.format == format && it.dim == dim && it.tileMode == tileMode && !it.isDepth &&
 			it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
 			&& it.firstMip == firstMip && it.numMip == numMip
 			&& it.firstSlice == firstSlice && it.numSlice == numSlice
@@ -162,14 +163,14 @@ LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 widt
 	return nullptr;
 }
 
-LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, bool isDepth)
+LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, bool isDepth, Latte::E_HWTILEMODE tileMode)
 {
 	cemu_assert_debug(firstSlice == 0);
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
+		if (it.format == format && it.dim == dim && it.tileMode == tileMode && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
 			&& it.firstMip == firstMip && it.numMip == numMip
 			&& it.firstSlice == firstSlice && it.numSlice == numSlice &&
 			it.isDepth == isDepth
@@ -182,13 +183,13 @@ LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR p
 }
 
 // look up view with unspecified mipCount and sliceCount
-LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format)
+LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, Latte::E_HWTILEMODE tileMode)
 {
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (!it.isDepth && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		if (!it.isDepth && it.tileMode == tileMode && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
 				return it.view;
@@ -198,13 +199,13 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32
 }
 
 // look up view with unspecified mipCount/sliceCount and only minimum width and height given
-LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr, sint32 minWidth, sint32 minHeight, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format)
+LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr, sint32 minWidth, sint32 minHeight, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, Latte::E_HWTILEMODE tileMode)
 {
 	uint32 key = _getViewBucketKeyNoRes(physAddr, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket_nores[key].list)
 	{
-		if (!it.isDepth && it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		if (!it.isDepth && it.tileMode == tileMode && it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
 				return it.view;
@@ -214,14 +215,14 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr,
 }
 
 // similar to lookupSlice but also compares isDepth
-LatteTextureView* LatteTextureViewLookupCache::lookupSliceEx(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, bool isDepth)
+LatteTextureView* LatteTextureViewLookupCache::lookupSliceEx(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, bool isDepth, Latte::E_HWTILEMODE tileMode)
 {
 	cemu_assert_debug(firstMip == 0);
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth)
+		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth && it.tileMode == tileMode)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
 				return it.view;
