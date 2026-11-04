@@ -167,7 +167,8 @@ void LatteTextureViewLookupCache::RemoveAll(LatteTextureView* view)
 }
 
 LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, Latte::E_HWTILEMODE tileMode)
-{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+{
+	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
 
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
@@ -195,7 +196,8 @@ LatteTextureView* LatteTextureViewLookupCache::lookup(MPTR physAddr, sint32 widt
 }
 
 LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR physAddr, sint32 width, sint32 height, sint32 depth, sint32 pitch, sint32 firstMip, sint32 numMip, sint32 firstSlice, sint32 numSlice, Latte::E_GX2SURFFMT format, Latte::E_DIM dim, bool isDepth, Latte::E_HWTILEMODE tileMode)
-{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+{
+	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
 
 	cemu_assert_debug(firstSlice == 0);
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
@@ -220,7 +222,8 @@ LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR p
 
 // look up view with unspecified mipCount and sliceCount
 LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, Latte::E_HWTILEMODE tileMode)
-{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+{
+	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
 
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
@@ -248,7 +251,8 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32
 
 // look up view with unspecified mipCount/sliceCount and only minimum width and height given
 LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr, sint32 minWidth, sint32 minHeight, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, Latte::E_HWTILEMODE tileMode)
-{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+{
+	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
 
 	uint32 key = _getViewBucketKeyNoRes(physAddr, pitch);
 	key %= TEXTURE_VIEW_BUCKETS;
@@ -276,7 +280,8 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr,
 
 // similar to lookupSlice but also compares isDepth
 LatteTextureView* LatteTextureViewLookupCache::lookupSliceEx(MPTR physAddr, sint32 width, sint32 height, sint32 pitch, sint32 firstMip, sint32 firstSlice, Latte::E_GX2SURFFMT format, bool isDepth, Latte::E_HWTILEMODE tileMode)
-{	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
+{
+	s_viewLookupAttempts.fetch_add(1, std::memory_order_relaxed);
 
 	cemu_assert_debug(firstMip == 0);
 	uint32 key = _getViewBucketKey(physAddr, width, height, pitch);
