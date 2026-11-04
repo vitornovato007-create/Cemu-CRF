@@ -2386,6 +2386,8 @@ void VulkanRenderer::PipelineCacheSaveThread(size_t cache_size)
 
 		size_t size = 0;
 		VkResult res = vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &size, nullptr);
+		if (res != VK_SUCCESS)
+			cemuLog_log(LogType::Force, "vkGetPipelineCacheData(save size query) failed: VkResult={}", (sint32)res);
 		if (res == VK_SUCCESS && size > 0 && size != cache_size)
 		{
 			std::vector<uint8_t> cacheData(size);
