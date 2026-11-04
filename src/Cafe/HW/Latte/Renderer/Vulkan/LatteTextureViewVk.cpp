@@ -143,9 +143,13 @@ VKRObjectTextureView* LatteTextureViewVk::CreateView(uint32 gpuSamplerSwizzle)
 	viewInfo.components.b = swizzle[compSelB];
 	viewInfo.components.a = swizzle[compSelA];
 
-	VkImageView view;
-	if (vkCreateImageView(m_device, &viewInfo, nullptr, &view) != VK_SUCCESS)
-		throw std::runtime_error("failed to create texture image view!");
+	VkImageView view = VK_NULL_HANDLE;
+	const VkResult viewResult = vkCreateImageView(m_device, &viewInfo, nullptr, &view);
+	if (viewResult != VK_SUCCESS)
+	{
+		cemuLog_log(LogType::Force, "Vulkan texture image view creation failed: VkResult={}, image={}, format={}, viewType={}, aspect={:#x}, mip={}+{}, slice={}+{}, swizzle={:03x}", (sint32)viewResult, (void*)viewInfo.image, (sint32)viewInfo.format, (sint32)viewInfo.viewType, viewInfo.subresourceRange.aspectMask, viewInfo.subresourceRange.baseMipLevel, viewInfo.subresourceRange.levelCount, viewInfo.subresourceRange.baseArrayLayer, viewInfo.subresourceRange.layerCount, gpuSamplerSwizzle);
+		throw std::runtime_error(fmt::format("Failed to create texture image view: VkResult={}", (sint32)viewResult));
+	}
 
 	return new VKRObjectTextureView(GetBaseImage()->GetImageObj(), view);
 }
@@ -223,10 +227,11 @@ VkSampler LatteTextureViewVk::GetDefaultTextureSampler(bool useLinearTexFilter)
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 
-	if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+	const VkResult samplerResult = vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler);
+	if (samplerResult != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Failed to create default sampler");
-		throw std::runtime_error("failed to create texture sampler!");
+		cemuLog_log(LogType::Force, "Vulkan default sampler creation failed: VkResult={}, filter={}, mipMode={}, addressMode={}", (sint32)samplerResult, (sint32)samplerInfo.minFilter, (sint32)samplerInfo.mipmapMode, (sint32)samplerInfo.addressModeU);
+		throw std::runtime_error(fmt::format("Failed to create texture sampler: VkResult={}", (sint32)samplerResult));
 	}
 
 	return sampler;
