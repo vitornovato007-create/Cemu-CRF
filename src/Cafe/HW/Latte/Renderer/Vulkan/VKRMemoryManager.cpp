@@ -151,7 +151,9 @@ void VKRSynchronizedRingAllocator::FlushReservation(AllocatorReservation_t& uplo
 	flushedRange.memory = uploadReservation.vkMem;
 	flushedRange.offset = uploadReservation.bufferOffset;
 	flushedRange.size = uploadReservation.size;
-	vkFlushMappedMemoryRanges(m_vkr->GetLogicalDevice(), 1, &flushedRange);
+	const VkResult flushResult = vkFlushMappedMemoryRanges(m_vkr->GetLogicalDevice(), 1, &flushedRange);
+	if (flushResult != VK_SUCCESS)
+		cemuLog_log(LogType::Force, "Vulkan staging upload flush failed: VkResult={}, offset={}, bytes={}", (sint32)flushResult, uploadReservation.bufferOffset, uploadReservation.size);
 }
 
 void VKRSynchronizedRingAllocator::CleanupBuffer(uint64 latestFinishedCommandBufferId)
@@ -249,7 +251,9 @@ void VKRSynchronizedHeapAllocator::FlushReservation(AllocatorReservation* upload
 		flushedRange.memory = uploadReservation->vkMem;
 		flushedRange.offset = uploadReservation->bufferOffset;
 		flushedRange.size = uploadReservation->size;
-		vkFlushMappedMemoryRanges(VulkanRenderer::GetInstance()->GetLogicalDevice(), 1, &flushedRange);
+		const VkResult flushResult = vkFlushMappedMemoryRanges(VulkanRenderer::GetInstance()->GetLogicalDevice(), 1, &flushedRange);
+		if (flushResult != VK_SUCCESS)
+			cemuLog_log(LogType::Force, "Vulkan index/stride upload flush failed: VkResult={}, bufferIndex={}, offset={}, bytes={}", (sint32)flushResult, uploadReservation->bufferIndex, uploadReservation->bufferOffset, uploadReservation->size);
 	}
 }
 
