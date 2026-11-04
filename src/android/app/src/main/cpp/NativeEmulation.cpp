@@ -551,14 +551,12 @@ namespace NativeEmulation
             {
                 const auto memory = memoryManager->GetDiagnostics();
                 report.append("Vulkan memory diagnostics (current allocator snapshot + process-lifetime counters):\n");
-                report.append(fmt::format("  Texture heap count: {}\n", memory.textureHeapCount));
-                report.append(fmt::format("  Texture heap allocated/reserved: {}/{} bytes\n", memory.textureAllocatedBytes, memory.textureHeapBytes));
-                report.append(fmt::format("  Staging allocator used/free: {}/{} bytes\n", memory.stagingBufferBytes - memory.stagingBufferFreeBytes, memory.stagingBufferFreeBytes));
-                report.append(fmt::format("  Index allocator used/free: {}/{} bytes\n", memory.indexBufferBytes - memory.indexBufferFreeBytes, memory.indexBufferFreeBytes));
-                report.append(fmt::format("  Vertex-stride allocator used/free: {}/{} bytes\n", memory.strideBufferBytes - memory.strideBufferFreeBytes, memory.strideBufferFreeBytes));
+                report.append(fmt::format("  Texture heap chunks/reserved bytes: {}/{}\n", memory.textureHeapChunks, memory.textureHeapReservedBytes));
+                report.append(fmt::format("  Texture allocations currently live: {} ({} bytes)\n", memory.textureAllocationsCurrentlyLive, memory.textureBytesCurrentlyAllocated));
                 report.append(fmt::format("  Buffer create attempts/success/failure: {}/{}/{}\n", memory.bufferCreateAttempts, memory.bufferCreateSuccesses, memory.bufferCreateFailures));
+                report.append(fmt::format("  Buffer bytes requested/cumulative allocated: {}/{}\n", memory.bufferBytesRequested, memory.bufferBytesAllocatedCumulative));
                 report.append(fmt::format("  Image allocation attempts/success/failure: {}/{}/{}\n", memory.imageAllocationAttempts, memory.imageAllocationSuccesses, memory.imageAllocationFailures));
-                report.append(fmt::format("  Image allocation bytes (cumulative successful requests): {}\n\n", memory.imageAllocationBytes));
+                report.append(fmt::format("  Image allocation bytes (cumulative successful requests): {}\n\n", memory.imageAllocationBytesCumulative));
             }
         }
         else
