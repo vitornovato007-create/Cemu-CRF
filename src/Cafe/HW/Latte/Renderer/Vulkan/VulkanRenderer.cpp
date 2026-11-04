@@ -453,7 +453,12 @@ VulkanRenderer::VulkanRenderer()
 		throw std::runtime_error("Unable to load instanced Vulkan functions");
 
 	uint32_t device_count = 0;
-	vkEnumeratePhysicalDevices(m_instance, &device_count, nullptr);
+	VkResult enumerateDevicesResult = vkEnumeratePhysicalDevices(m_instance, &device_count, nullptr);
+	if (enumerateDevicesResult != VK_SUCCESS)
+	{
+		cemuLog_log(LogType::Force, "vkEnumeratePhysicalDevices(count) failed during renderer initialization: VkResult={}", (sint32)enumerateDevicesResult);
+		throw std::runtime_error(fmt::format("Failed to enumerate Vulkan physical devices: VkResult={}", (sint32)enumerateDevicesResult));
+	}
 	if (device_count == 0)
 		throw std::runtime_error("Failed to find a GPU with Vulkan support.");
 
@@ -467,7 +472,13 @@ VulkanRenderer::VulkanRenderer()
 	VkPhysicalDevice fallbackDevice = VK_NULL_HANDLE;
 
 	std::vector<VkPhysicalDevice> devices(device_count);
-	vkEnumeratePhysicalDevices(m_instance, &device_count, devices.data());
+	enumerateDevicesResult = vkEnumeratePhysicalDevices(m_instance, &device_count, devices.data());
+	if (enumerateDevicesResult != VK_SUCCESS)
+	{
+		cemuLog_log(LogType::Force, "vkEnumeratePhysicalDevices(list) failed during renderer initialization: VkResult={}, allocatedSlots={}", (sint32)enumerateDevicesResult, devices.size());
+		throw std::runtime_error(fmt::format("Failed to retrieve Vulkan physical devices: VkResult={}", (sint32)enumerateDevicesResult));
+	}
+	devices.resize(device_count);
 	for (const auto& device : devices)
 	{
 		if (IsDeviceSuitable(surface, device))
