@@ -482,10 +482,6 @@ private:
 			bool shaderRoundingModeRTEFloat32{ false };
 		}shaderFloatControls; // from VK_KHR_shader_float_controls
 
-		struct
-		{
-		}instanceExtensions;
-
 		struct  
 		{
 			bool useTFEmulationViaSSBO = true; // emulate transform feedback via shader writes to a storage buffer
