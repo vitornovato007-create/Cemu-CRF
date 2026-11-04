@@ -371,18 +371,7 @@ void RendererShaderVk::CreateVkShaderModule(std::span<uint32> spirvBuffer)
 	s_vkShaderModuleSuccesses.fetch_add(1, std::memory_order_relaxed);
 	s_vkShaderModuleBytes.fetch_add(createInfo.codeSize, std::memory_order_relaxed);
 
-	// set debug name
-	if (vkr->IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
-	{
-		VkDebugUtilsObjectNameInfoEXT objName{};
-		objName.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-		objName.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
-		objName.pNext = nullptr;
-		objName.objectHandle = (uint64_t)m_shader_module;
-		auto objNameStr = fmt::format("shader_{:016x}_{:016x}", m_baseHash, m_auxHash);
-		objName.pObjectName = objNameStr.c_str();
-		vkSetDebugUtilsObjectNameEXT(vkr->GetLogicalDevice(), &objName);
-	}
+
 }
 
 void RendererShaderVk::FinishCompilation()
