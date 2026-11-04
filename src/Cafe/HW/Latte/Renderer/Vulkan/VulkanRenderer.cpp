@@ -801,6 +801,17 @@ VulkanRenderer::~VulkanRenderer()
 	// delete null objects
 	DeleteNullObjects();
 
+	// Unmap host-visible allocations before destroying their buffers and freeing memory.
+	if (m_uniformVarBufferPtr != nullptr && m_uniformVarBufferMemory != VK_NULL_HANDLE)
+		vkUnmapMemory(m_logicalDevice, m_uniformVarBufferMemory);
+	m_uniformVarBufferPtr = nullptr;
+	if (m_textureReadbackBufferPtr != nullptr && m_textureReadbackBufferMemory != VK_NULL_HANDLE)
+		vkUnmapMemory(m_logicalDevice, m_textureReadbackBufferMemory);
+	m_textureReadbackBufferPtr = nullptr;
+	if (m_occlusionQueries.ptrQueryResults != nullptr && m_occlusionQueries.memoryQueryResults != VK_NULL_HANDLE)
+		vkUnmapMemory(m_logicalDevice, m_occlusionQueries.memoryQueryResults);
+	m_occlusionQueries.ptrQueryResults = nullptr;
+
 	// delete buffers
 	memoryManager->DeleteBuffer(m_uniformVarBuffer, m_uniformVarBufferMemory);
 	memoryManager->DeleteBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory);
