@@ -16,9 +16,15 @@ LatteTextureReadbackInfoVk::~LatteTextureReadbackInfoVk()
 uint8* LatteTextureReadbackInfoVk::GetData()
 {
 	if (m_buffer_ptr == nullptr || m_bufferMemory == VK_NULL_HANDLE || m_transferSize == 0)
-		throw std::runtime_error("Vulkan texture readback has no valid mapped buffer range");
+	{
+		cemuLog_log(LogType::Force, "Vulkan texture readback skipped: missing mapped buffer or empty transfer range");
+		return nullptr;
+	}
 	if ((uint64)m_buffer_offset + m_transferSize > m_bufferSize)
-		throw std::runtime_error("Vulkan texture readback range exceeds the mapped buffer");
+	{
+		cemuLog_log(LogType::Force, "Vulkan texture readback skipped: range exceeds mapped buffer (offset={}, bytes={}, capacity={})", m_buffer_offset, m_transferSize, m_bufferSize);
+		return nullptr;
+	}
 
 	if (m_memoryIsCoherent)
 		return m_buffer_ptr + m_buffer_offset;
@@ -38,7 +44,7 @@ uint8* LatteTextureReadbackInfoVk::GetData()
 	if (invalidateResult != VK_SUCCESS)
 	{
 		cemuLog_log(LogType::Force, "Vulkan texture readback cache invalidation failed: VkResult={}, offset={}, transferBytes={}, atomSize={}", (sint32)invalidateResult, m_buffer_offset, m_transferSize, atomSize);
-		throw std::runtime_error(fmt::format("Vulkan texture readback invalidation failed: VkResult={}", (sint32)invalidateResult));
+		return nullptr;
 	}
 	return m_buffer_ptr + m_buffer_offset;
 }
