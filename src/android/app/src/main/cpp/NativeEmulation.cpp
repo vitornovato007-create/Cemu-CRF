@@ -3,6 +3,7 @@
 #include "AndroidEmulatedController.h"
 #include "AndroidFilesystemCallbacks.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
+#include "Cafe/HW/Latte/Core/LatteTexture.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
 #include "Cafe/CafeSystem.h"
@@ -21,6 +22,7 @@
 #include <deque>
 #include <fstream>
 #include <mutex>
+#include <map>
 #include <thread>
 #include <vector>
 
@@ -436,6 +438,47 @@ namespace NativeEmulation
 
     AndroidLogCapture s_androidLogCapture;
 
+    static void AppendTextureCacheSnapshot(std::string& report)
+    {
+        report.append("Texture cache snapshot (current live cache; not cumulative load totals):\n");
+        const auto textures = LatteTexture_QueryCacheInfo();
+        if (textures.empty())
+        {
+            report.append("  No texture snapshot available (emulation may be idle or the render-thread query timed out).\n\n");
+            return;
+        }
+
+        size_t depthCount = 0;
+        size_t colorCount = 0;
+        size_t gpuUpdatedCount = 0;
+        size_t totalViews = 0;
+        size_t totalMipLevels = 0;
+        std::map<uint32, size_t> formatCounts;
+        for (const auto& texture : textures)
+        {
+            if (texture.isDepth)
+                ++depthCount;
+            else
+                ++colorCount;
+            if (texture.isUpdatedOnGPU)
+                ++gpuUpdatedCount;
+            totalViews += texture.views.size() + 1;
+            totalMipLevels += std::max(texture.mipLevels, 0);
+            ++formatCounts[(uint32)texture.format];
+        }
+
+        report.append(fmt::format("  Live texture objects: {}\n", textures.size()));
+        report.append(fmt::format("  Color textures: {}\n", colorCount));
+        report.append(fmt::format("  Depth textures: {}\n", depthCount));
+        report.append(fmt::format("  GPU-updated textures: {}\n", gpuUpdatedCount));
+        report.append(fmt::format("  Texture views (including base views): {}\n", totalViews));
+        report.append(fmt::format("  Sum of mip levels across texture objects: {}\n", totalMipLevels));
+        report.append("  Objects by GX2 format (numeric enum):\n");
+        for (const auto& [format, count] : formatCounts)
+            report.append(fmt::format("    0x{:04x}: {}\n", format, count));
+        report.append("\n");
+    }
+
     std::string GetVulkanDiagnosticLog()
     {
         std::string report;
@@ -448,6 +491,7 @@ namespace NativeEmulation
         report.append("Vulkan validation requested: ");
         report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes\n" : "no\n");
         report.append("Check session entries for actual validation-layer and debug-messenger initialization status.\n\n");
+        AppendTextureCacheSnapshot(report);
         report.append(s_androidLogCapture.Snapshot());
         if (report.empty() || report.back() != '\n')
             report.push_back('\n');
