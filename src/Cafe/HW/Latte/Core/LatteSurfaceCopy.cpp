@@ -29,7 +29,7 @@ void LatteSurfaceCopy_copySurfaceNew(MPTR srcPhysAddr, MPTR srcMipAddr, uint32 s
 	}
 	// look up destination texture
 	LatteTexture* destinationTexture = nullptr;
-	LatteTextureView* destinationView = LatteTextureViewLookupCache::lookupSlice(dstPhysAddr, dstWidth, dstHeight, dstPitch, dstLevel, dstSlice, dstSurfaceFormat);
+	LatteTextureView* destinationView = LatteTextureViewLookupCache::lookupSlice(dstPhysAddr, dstWidth, dstHeight, dstPitch, dstLevel, dstSlice, dstSurfaceFormat, dstTilemode);
 	if (destinationView)
 		destinationTexture = destinationView->baseTexture;
 
