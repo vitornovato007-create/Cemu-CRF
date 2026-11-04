@@ -569,6 +569,7 @@ namespace NativeEmulation
             {
                 const auto memory = memoryManager->GetDiagnostics();
                 report.append("Vulkan memory diagnostics (current allocator snapshot + process-lifetime counters):\n");
+                report.append(fmt::format("  Non-coherent atom size: {} bytes\n", renderer->GetNonCoherentAtomSize()));
                 report.append(fmt::format("  Texture heap chunks/reserved bytes: {}/{}\n", memory.textureHeapChunks, memory.textureHeapReservedBytes));
                 report.append(fmt::format("  Texture allocations currently live: {} ({} bytes)\n", memory.textureAllocationsCurrentlyLive, memory.textureBytesCurrentlyAllocated));
                 report.append(fmt::format("  Buffer create attempts/success/failure: {}/{}/{}\n", memory.bufferCreateAttempts, memory.bufferCreateSuccesses, memory.bufferCreateFailures));
