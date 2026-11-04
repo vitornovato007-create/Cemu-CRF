@@ -204,8 +204,13 @@ LatteTextureView* LatteTextureViewLookupCache::lookupWithColorOrDepthType(MPTR p
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.firstMip == firstMip && it.numMip == numMip && it.firstSlice == firstSlice && it.numSlice == numSlice && it.tileMode != tileMode)
-			s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		if (it.format == format && it.dim == dim && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.firstMip == firstMip && it.numMip == numMip && it.firstSlice == firstSlice && it.numSlice == numSlice)
+		{
+			if (it.tileMode != tileMode)
+				s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+			else if (it.isDepth != isDepth)
+				s_viewDepthTypeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		}
 		if (it.format == format && it.dim == dim && it.tileMode == tileMode && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr
 			&& it.firstMip == firstMip && it.numMip == numMip
 			&& it.firstSlice == firstSlice && it.numSlice == numSlice &&
@@ -288,8 +293,13 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSliceEx(MPTR physAddr, sint
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth && it.tileMode != tileMode)
-			s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		{
+			if (it.tileMode != tileMode && it.isDepth == isDepth)
+				s_viewTileModeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+			else if (it.tileMode == tileMode && it.isDepth != isDepth)
+				s_viewDepthTypeMismatchCandidates.fetch_add(1, std::memory_order_relaxed);
+		}
 		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format && it.isDepth == isDepth && it.tileMode == tileMode)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
