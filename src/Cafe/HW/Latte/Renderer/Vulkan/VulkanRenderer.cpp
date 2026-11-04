@@ -2448,7 +2448,9 @@ void VulkanRenderer::CreatePipelineCache()
 	}
 
 	size_t cache_size = 0;
-	vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &cache_size, nullptr);
+	const VkResult cacheDataResult = vkGetPipelineCacheData(m_logicalDevice, m_pipeline_cache, &cache_size, nullptr);
+	if (cacheDataResult != VK_SUCCESS)
+		cemuLog_log(LogType::Force, "vkGetPipelineCacheData(size query) failed: VkResult={}", (sint32)cacheDataResult);
 
 	m_pipeline_cache_save_thread = std::thread(&VulkanRenderer::PipelineCacheSaveThread, this, cache_size);
 }
@@ -2969,7 +2971,7 @@ VkPipeline VulkanRenderer::backbufferBlit_createGraphicsPipeline(VkDescriptorSet
 
 	VkResult result = vkCreatePipelineLayout(m_logicalDevice, &pipelineLayoutInfo, nullptr, &m_pipelineLayout);
 	if (result != VK_SUCCESS)
-		throw std::runtime_error(fmt::format("Failed to create pipeline layout: {}", result));
+		throw std::runtime_error(fmt::format("Backbuffer blit vkCreatePipelineLayout failed: VkResult={}, descriptorSetLayouts={}, pushConstantBytes={}", (sint32)result, pipelineLayoutInfo.setLayoutCount, pipelineLayoutInfo.pushConstantRangeCount ? pipelineLayoutInfo.pPushConstantRanges[0].size : 0));
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {};
 	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -2992,8 +2994,8 @@ VkPipeline VulkanRenderer::backbufferBlit_createGraphicsPipeline(VkDescriptorSet
 	result = vkCreateGraphicsPipelines(m_logicalDevice, m_pipeline_cache, 1, &pipelineInfo, nullptr, &pipeline);
 	if (result != VK_SUCCESS)
 	{
-		cemuLog_log(LogType::Force, "Failed to create graphics pipeline. Error {}", result);
-		throw std::runtime_error(fmt::format("Failed to create graphics pipeline: {}", result));
+		cemuLog_log(LogType::Force, "Backbuffer blit vkCreateGraphicsPipelines failed: VkResult={}, renderPass={}, shaderStages={}, vertexAttributes={}, extent={}x{}", (sint32)result, (void*)chainInfo.m_swapchainRenderPass, pipelineInfo.stageCount, vertexInputAttributeDescription.size(), chainInfo.m_actualExtent.width, chainInfo.m_actualExtent.height);
+		throw std::runtime_error(fmt::format("Backbuffer blit graphics pipeline creation failed: VkResult={}", (sint32)result));
 	}
 
 	m_backbufferBlitPipelineCache[hash] = pipeline;
