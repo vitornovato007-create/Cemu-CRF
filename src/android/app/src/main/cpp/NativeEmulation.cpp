@@ -458,6 +458,26 @@ namespace NativeEmulation
         report.append(fmt::format("  Renderer texture upload calls: {}\n", loadStats.rendererUploadCalls));
         report.append(fmt::format("  Bytes passed to renderer texture uploads: {}\n\n", loadStats.rendererUploadBytes));
 
+        uint64 droppedTextureEvents = 0;
+        const auto recentTextureEvents = LatteTextureLoader_GetRecentDiagnosticEvents(droppedTextureEvents);
+        report.append("Recent texture loading failures (bounded ring, newest entries retained):\n");
+        report.append(fmt::format("  Events overwritten or dropped: {}\n", droppedTextureEvents));
+        if (recentTextureEvents.empty())
+        {
+            report.append("  No decoder or upload-buffer failures recorded in this process.\n");
+        }
+        else
+        {
+            for (const auto& event : recentTextureEvents)
+            {
+                const char* eventName = event.type == LatteTextureDiagnosticEventType::DecoderUnavailable
+                    ? "decoder unavailable" : "upload buffer allocation failed";
+                report.append(fmt::format("  {}: GX2=0x{:04x}, {}x{}, slice={}, mip={}, depth={}, bytes={}\n",
+                    eventName, event.format, event.width, event.height, event.slice, event.mip, event.isDepth ? "yes" : "no", event.bytes));
+            }
+        }
+        report.append("\n");
+
         report.append("Texture cache snapshot (current live cache; not cumulative load totals):\n");
         const auto textures = LatteTexture_QueryCacheInfo();
         if (textures.empty())
