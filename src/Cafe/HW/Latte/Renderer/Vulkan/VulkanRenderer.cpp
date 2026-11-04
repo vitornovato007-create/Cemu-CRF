@@ -36,6 +36,28 @@
 
 extern std::atomic_int g_compiling_pipelines;
 
+namespace
+{
+	std::atomic<bool> s_validationInitializationAttempted{ false };
+	std::atomic<bool> s_validationRequested{ false };
+	std::atomic<bool> s_validationLayerEnabled{ false };
+	std::atomic<bool> s_debugUtilsAvailable{ false };
+	std::atomic<bool> s_debugMessengerCreated{ false };
+	std::atomic<sint32> s_debugMessengerResult{ VK_NOT_READY };
+}
+
+VulkanValidationDiagnostics VulkanRenderer_GetValidationDiagnostics()
+{
+	VulkanValidationDiagnostics result;
+	result.initializationAttempted = s_validationInitializationAttempted.load(std::memory_order_relaxed);
+	result.validationRequested = s_validationRequested.load(std::memory_order_relaxed);
+	result.validationLayerEnabled = s_validationLayerEnabled.load(std::memory_order_relaxed);
+	result.debugUtilsAvailable = s_debugUtilsAvailable.load(std::memory_order_relaxed);
+	result.debugMessengerCreated = s_debugMessengerCreated.load(std::memory_order_relaxed);
+	result.debugMessengerResult = s_debugMessengerResult.load(std::memory_order_relaxed);
+	return result;
+}
+
 const  std::vector<const char*> kOptionalDeviceExtensions =
 {
 	VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME,
@@ -348,8 +370,14 @@ VulkanRenderer::VulkanRenderer()
 	cemuLog_log(LogType::Force, "------- Init Vulkan graphics backend -------");
 
 	const bool useValidationLayer = cemuLog_isLoggingEnabled(LogType::VulkanValidation);
+	s_validationInitializationAttempted.store(true, std::memory_order_relaxed);
+	s_validationRequested.store(useValidationLayer, std::memory_order_relaxed);
+	s_validationLayerEnabled.store(false, std::memory_order_relaxed);
+	s_debugUtilsAvailable.store(false, std::memory_order_relaxed);
+	s_debugMessengerCreated.store(false, std::memory_order_relaxed);
+	s_debugMessengerResult.store(VK_NOT_READY, std::memory_order_relaxed);
 	if (useValidationLayer)
-		cemuLog_log(LogType::Force, "Validation layer is enabled");
+		cemuLog_log(LogType::Force, "Vulkan validation requested; checking layer availability");
 
 	VkResult err;
 
@@ -389,9 +417,14 @@ VulkanRenderer::VulkanRenderer()
 	err = vkCreateInstance(&create_info, nullptr, &m_instance);
 
 	if (err == VK_ERROR_LAYER_NOT_PRESENT) {
-		cemuLog_log(LogType::Force, "Failed to enable vulkan validation (VK_LAYER_KHRONOS_validation)");
+		cemuLog_log(LogType::Force, "Vulkan validation layer unavailable: VK_LAYER_KHRONOS_validation; retrying without validation");
 		create_info.enabledLayerCount = 0;
 		err = vkCreateInstance(&create_info, nullptr, &m_instance);
+	}
+	else if (err == VK_SUCCESS && useValidationLayer)
+	{
+		s_validationLayerEnabled.store(true, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "Vulkan validation layer successfully enabled");
 	}
 
 	if (err != VK_SUCCESS)
@@ -573,23 +606,44 @@ VulkanRenderer::VulkanRenderer()
 
 	vkDestroySurfaceKHR(m_instance, surface, nullptr);
 
-	if (useValidationLayer && m_featureControl.instanceExtensions.debug_utils)
+	s_debugUtilsAvailable.store(m_featureControl.instanceExtensions.debug_utils, std::memory_order_relaxed);
+	if (useValidationLayer)
 	{
-		PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT"));
+		if (!m_featureControl.instanceExtensions.debug_utils)
+		{
+			s_debugMessengerResult.store(VK_ERROR_EXTENSION_NOT_PRESENT, std::memory_order_relaxed);
+			cemuLog_log(LogType::Force, "Vulkan validation requested, but VK_EXT_debug_utils is unavailable");
+		}
+		else
+		{
+			PFN_vkCreateDebugUtilsMessengerEXT createDebugMessenger = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(m_instance, "vkCreateDebugUtilsMessengerEXT"));
+			if (!createDebugMessenger)
+			{
+				s_debugMessengerResult.store(VK_ERROR_EXTENSION_NOT_PRESENT, std::memory_order_relaxed);
+				cemuLog_log(LogType::Force, "Vulkan debug messenger function pointer is unavailable");
+			}
+			else
+			{
+				VkDebugUtilsMessengerCreateInfoEXT debugCallback{};
+				debugCallback.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+				debugCallback.pNext = nullptr;
+				debugCallback.flags = 0;
+				debugCallback.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+				debugCallback.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+				debugCallback.pfnUserCallback = &DebugUtilsCallback;
 
-		VkDebugUtilsMessengerCreateInfoEXT debugCallback{};
-		debugCallback.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		debugCallback.pNext = nullptr;
-		debugCallback.flags = 0;
-		debugCallback.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-		debugCallback.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-		debugCallback.pfnUserCallback = &DebugUtilsCallback;
-
-		vkCreateDebugUtilsMessengerEXT(m_instance, &debugCallback, nullptr, &m_debugCallback);
+				const VkResult messengerResult = createDebugMessenger(m_instance, &debugCallback, nullptr, &m_debugCallback);
+				s_debugMessengerResult.store((sint32)messengerResult, std::memory_order_relaxed);
+				if (messengerResult == VK_SUCCESS && m_debugCallback != VK_NULL_HANDLE)
+				{
+					s_debugMessengerCreated.store(true, std::memory_order_relaxed);
+					cemuLog_log(LogType::Force, "Vulkan debug messenger created successfully");
+				}
+				else
+					cemuLog_log(LogType::Force, "Vulkan debug messenger creation failed: VkResult={}", (sint32)messengerResult);
+			}
+		}
 	}
-
-	if (m_featureControl.instanceExtensions.debug_utils)
-		cemuLog_log(LogType::Force, "Using available debug function: vkCreateDebugUtilsMessengerEXT()");
 
 	// set initial viewport and scissor box size
 	m_state.currentViewport.width = 4;
