@@ -149,8 +149,9 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 	// parse control flow instructions
 	for(uint32 i=0; i<programSize/8; i++)
 	{
-		uint32 cfWord0 = *(uint32*)(programData+i*8+0);
-		uint32 cfWord1 = *(uint32*)(programData+i*8+4);
+		uint32 cfWord0, cfWord1;
+		std::memcpy(&cfWord0, programData + (size_t)i * 8, sizeof(uint32));
+		std::memcpy(&cfWord1, programData + (size_t)i * 8 + 4, sizeof(uint32));
 		uint32 cf_inst23_7 = (cfWord1>>23)&0x7F;
 		// check the bigger opcode fields first
 		if( cf_inst23_7 < 0x40 ) // at 0x40 the bits overlap with the ALU instruction encoding
