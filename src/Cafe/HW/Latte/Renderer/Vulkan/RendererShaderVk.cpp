@@ -22,6 +22,11 @@ extern std::atomic_int g_compiled_shaders_async;
 
 namespace
 {
+	std::atomic<uint64> s_vkShaderPreprocessFailures{ 0 };
+	std::atomic<uint64> s_vkShaderParseFailures{ 0 };
+	std::atomic<uint64> s_vkShaderLinkFailures{ 0 };
+	std::atomic<uint64> s_vkShaderInterfaceMappingFailures{ 0 };
+	std::atomic<uint64> s_vkShaderSpirvGenerationFailures{ 0 };
 	std::atomic<uint64> s_vkShaderModuleAttempts{ 0 };
 	std::atomic<uint64> s_vkShaderModuleSuccesses{ 0 };
 	std::atomic<uint64> s_vkShaderModuleFailures{ 0 };
@@ -31,6 +36,11 @@ namespace
 VulkanShaderDiagnostics VulkanShader_GetDiagnostics()
 {
 	VulkanShaderDiagnostics result;
+	result.preprocessFailures = s_vkShaderPreprocessFailures.load(std::memory_order_relaxed);
+	result.parseFailures = s_vkShaderParseFailures.load(std::memory_order_relaxed);
+	result.linkFailures = s_vkShaderLinkFailures.load(std::memory_order_relaxed);
+	result.interfaceMappingFailures = s_vkShaderInterfaceMappingFailures.load(std::memory_order_relaxed);
+	result.spirvGenerationFailures = s_vkShaderSpirvGenerationFailures.load(std::memory_order_relaxed);
 	result.moduleCreateAttempts = s_vkShaderModuleAttempts.load(std::memory_order_relaxed);
 	result.moduleCreateSuccesses = s_vkShaderModuleSuccesses.load(std::memory_order_relaxed);
 	result.moduleCreateFailures = s_vkShaderModuleFailures.load(std::memory_order_relaxed);
@@ -435,7 +445,9 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	glslang::TShader::ForbidIncluder Includer;
 	if (!Shader.preprocess(&Resources, 450, ENoProfile, false, false, messagesPreprocess, &PreprocessedGLSL, Includer))
 	{
-		cemuLog_log(LogType::Force, fmt::format("GLSL Preprocessing Failed For {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Shader.getInfoLog()));
+		s_vkShaderPreprocessFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, fmt::format("GLSL preprocessing failed: stage={}, shader={:016x}_{:016x}: \"{}\"", (uint32)GetType(), m_baseHash, m_auxHash, Shader.getInfoLog()));
+		LogShaderSourceBounded(m_glslCode, m_baseHash, m_auxHash);
 		FinishCompilation();
 		return;
 	}
@@ -450,7 +462,8 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	Shader.setStrings(&PreprocessedCStr, 1);
 	if (!Shader.parse(&Resources, 100, false, messagesParseLink))
 	{
-		cemuLog_log(LogType::Force, fmt::format("GLSL parsing failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Shader.getInfoLog()));
+		s_vkShaderParseFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, fmt::format("GLSL parsing failed: stage={}, shader={:016x}_{:016x}: \"{}\"", (uint32)GetType(), m_baseHash, m_auxHash, Shader.getInfoLog()));
 		LogShaderSourceErrorContext(PreprocessedGLSL, Shader.getInfoLog(), m_baseHash, m_auxHash);
 		LogShaderSourceBounded(PreprocessedGLSL, m_baseHash, m_auxHash);
 		// A malformed guest shader must not abort the entire emulator in Debug builds.
@@ -463,7 +476,8 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 
 	if (!Program.link(messagesParseLink))
 	{
-		cemuLog_log(LogType::Force, fmt::format("GLSL linking failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Program.getInfoLog()));
+		s_vkShaderLinkFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, fmt::format("GLSL linking failed: stage={}, shader={:016x}_{:016x}: \"{}\"", (uint32)GetType(), m_baseHash, m_auxHash, Program.getInfoLog()));
 		LogShaderSourceBounded(PreprocessedGLSL, m_baseHash, m_auxHash);
 		// Treat a failed shader as unavailable instead of terminating emulation.
 		FinishCompilation();
@@ -472,7 +486,9 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 
 	if (!Program.mapIO())
 	{
-		cemuLog_log(LogType::Force, fmt::format("GLSL linking failed for {:016x}_{:016x}: \"{}\"", m_baseHash, m_auxHash, Program.getInfoLog()));
+		s_vkShaderInterfaceMappingFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, fmt::format("GLSL interface mapping failed: stage={}, shader={:016x}_{:016x}: \"{}\"", (uint32)GetType(), m_baseHash, m_auxHash, Program.getInfoLog()));
+		LogShaderSourceBounded(PreprocessedGLSL, m_baseHash, m_auxHash);
 		FinishCompilation();
 		return;
 	}
@@ -490,6 +506,14 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	//auto beginTime = benchmarkTimer_start();
 
 	GlslangToSpv(*Program.getIntermediate(state), spirvBuffer, &logger, &spvOptions);
+	if (spirvBuffer.empty())
+	{
+		s_vkShaderSpirvGenerationFailures.fetch_add(1, std::memory_order_relaxed);
+		cemuLog_log(LogType::Force, "GLSL-to-SPIR-V generation produced an empty module: stage={}, shader={:016x}_{:016x}, diagnostics={}", (uint32)GetType(), m_baseHash, m_auxHash, logger.getAllMessages());
+		LogShaderSourceBounded(PreprocessedGLSL, m_baseHash, m_auxHash);
+		FinishCompilation();
+		return;
+	}
 
 	//double timeDur = benchmarkTimer_stop(beginTime);
 	//forceLogRemoveMe_printf("Shader GLSL-to-SPIRV compilation took %lfms Size %08x", timeDur, spirvBuffer.size()*4);
