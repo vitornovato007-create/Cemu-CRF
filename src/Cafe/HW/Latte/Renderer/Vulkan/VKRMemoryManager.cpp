@@ -544,13 +544,15 @@ size_t VKRMemoryManager::GetTotalMemoryForBufferType(VkBufferUsageFlags usage, V
 	return total;
 }
 
-bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
+bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory, VkMemoryPropertyFlags* actualProperties) const
 {
 	s_vkBufferBytesRequested.fetch_add(size, std::memory_order_relaxed);
 	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
 	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return false; };
 	buffer = VK_NULL_HANDLE;
 	bufferMemory = VK_NULL_HANDLE;
+	if (actualProperties)
+		*actualProperties = 0;
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.usage = usage;
@@ -593,6 +595,12 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 		bufferMemory = VK_NULL_HANDLE;
 		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBuffer): VkResult {}", (sint32)bindResult);
 		return recordFailure();
+	}
+	if (actualProperties)
+	{
+		VkPhysicalDeviceMemoryProperties memoryProperties{};
+		vkGetPhysicalDeviceMemoryProperties(m_vkr->GetPhysicalDevice(), &memoryProperties);
+		*actualProperties = memoryProperties.memoryTypes[allocInfo.memoryTypeIndex].propertyFlags;
 	}
 	s_vkBufferCreateSuccesses.fetch_add(1, std::memory_order_relaxed);
 	s_vkBufferBytesAllocated.fetch_add(memRequirements.size, std::memory_order_relaxed);
