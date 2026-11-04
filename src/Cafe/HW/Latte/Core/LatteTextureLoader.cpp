@@ -4,6 +4,8 @@
 #include "Cafe/CafeSystem.h"
 
 #include <atomic>
+#include <deque>
+#include <mutex>
 
 namespace
 {
@@ -29,6 +31,38 @@ LatteTextureLoadDiagnostics LatteTextureLoader_GetDiagnostics()
 	result.rendererUploadCalls = s_textureRendererUploadCalls.load(std::memory_order_relaxed);
 	result.rendererUploadBytes = s_textureRendererUploadBytes.load(std::memory_order_relaxed);
 	return result;
+}
+
+namespace
+{
+	std::mutex s_textureDiagnosticEventMutex;
+	std::deque<LatteTextureDiagnosticEvent> s_textureDiagnosticEvents;
+	std::atomic<uint64> s_textureDiagnosticEventsDropped{ 0 };
+
+	void RecordTextureDiagnosticEvent(LatteTextureDiagnosticEventType type, Latte::E_GX2SURFFMT format, uint32 width, uint32 height, uint32 slice, uint32 mip, uint64 bytes, bool isDepth)
+	{
+		try
+		{
+			std::lock_guard lock(s_textureDiagnosticEventMutex);
+			if (s_textureDiagnosticEvents.size() >= 64)
+			{
+				s_textureDiagnosticEvents.pop_front();
+				s_textureDiagnosticEventsDropped.fetch_add(1, std::memory_order_relaxed);
+			}
+			s_textureDiagnosticEvents.push_back({ type, (uint32)format, width, height, slice, mip, bytes, isDepth });
+		}
+		catch (...)
+		{
+			s_textureDiagnosticEventsDropped.fetch_add(1, std::memory_order_relaxed);
+		}
+	}
+}
+
+std::vector<LatteTextureDiagnosticEvent> LatteTextureLoader_GetRecentDiagnosticEvents(uint64& droppedEvents)
+{
+	std::lock_guard lock(s_textureDiagnosticEventMutex);
+	droppedEvents = s_textureDiagnosticEventsDropped.load(std::memory_order_relaxed);
+	return std::vector<LatteTextureDiagnosticEvent>(s_textureDiagnosticEvents.begin(), s_textureDiagnosticEvents.end());
 }
 
 //#define BENCHMARK_TEXTURE_DECODING		// if defined, time it takes to decode textures will be measured and logged to log.txt
@@ -713,6 +747,7 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	if (texDecoder == nullptr)
 	{
 		s_textureDecoderUnavailable.fetch_add(1, std::memory_order_relaxed);
+		RecordTextureDiagnosticEvent(LatteTextureDiagnosticEventType::DecoderUnavailable, format, width, height, sliceIndex, mipIndex, 0, tex->isDepth);
 		return;
 	}
 
@@ -727,6 +762,7 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	if (pixelData == nullptr)
 	{
 		s_textureUploadBufferAllocationFailures.fetch_add(1, std::memory_order_relaxed);
+		RecordTextureDiagnosticEvent(LatteTextureDiagnosticEventType::UploadBufferAllocationFailed, format, width, height, sliceIndex, mipIndex, imageSize, tex->isDepth);
 		cemuLog_log(LogType::Force, "Texture upload buffer allocation failed: format=0x{:04x}, {}x{}, slice={}, mip={}, bytes={}", (uint32)format, width, height, sliceIndex, mipIndex, imageSize);
 		if (textureLoader.dumpRGBA)
 			free(textureLoader.dumpRGBA);
