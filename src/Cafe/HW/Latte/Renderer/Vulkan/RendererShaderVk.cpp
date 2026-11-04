@@ -279,8 +279,9 @@ public:
 			cemu_assert_debug(job->m_compilationState.getValue() == RendererShaderVk::COMPILATION_STATE::QUEUED);
 			job->m_compilationState.setValue(RendererShaderVk::COMPILATION_STATE::COMPILING);
 			s_compilationQueueMutex.unlock();
-			// compile
-			job->CompileInternal(false);
+			// Compile failures must not escape the worker thread: an uncaught
+			// exception would terminate the entire process.
+			job->CompileSafely(false);
 			++g_compiled_shaders_async;
 			// mark as compiled
 			cemu_assert_debug(job->m_compilationState.getValue() == RendererShaderVk::COMPILATION_STATE::COMPILING);
@@ -388,6 +389,28 @@ void RendererShaderVk::FinishCompilation()
 {
 	m_glslCode.clear();
 	m_glslCode.shrink_to_fit();
+}
+
+void RendererShaderVk::CompileSafely(bool isRenderThread)
+{
+	try
+	{
+		CompileInternal(isRenderThread);
+	}
+	catch (const std::exception& e)
+	{
+		cemuLog_log(LogType::Force,
+			"Vulkan shader compilation aborted by exception: stage={}, shader={:016x}_{:016x}, error={}",
+			(uint32)GetType(), m_baseHash, m_auxHash, e.what());
+		FinishCompilation();
+	}
+	catch (...)
+	{
+		cemuLog_log(LogType::Force,
+			"Vulkan shader compilation aborted by unknown exception: stage={}, shader={:016x}_{:016x}",
+			(uint32)GetType(), m_baseHash, m_auxHash);
+		FinishCompilation();
+	}
 }
 
 void RendererShaderVk::CompileInternal(bool isRenderThread)
@@ -567,8 +590,8 @@ void RendererShaderVk::PreponeCompilation(bool isRenderThread)
 	}
 	else
 	{
-		// compile synchronously
-		CompileInternal(isRenderThread);
+		// Use the same exception boundary as the asynchronous compiler.
+		CompileSafely(isRenderThread);
 		m_compilationState.setValue(COMPILATION_STATE::DONE);
 	}
 }
