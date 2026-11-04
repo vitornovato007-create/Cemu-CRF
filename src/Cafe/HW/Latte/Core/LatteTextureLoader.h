@@ -2,6 +2,7 @@
 #include "util/helpers/ClassWrapper.h"
 #include "Cafe/HW/Latte/LatteAddrLib/LatteAddrLib.h"
 #include "util/ImageWriter/tga.h"
+#include <limits>
 
 struct LatteTextureLoaderCtx
 {
@@ -116,9 +117,23 @@ public:
 	}
 
 	// image size
-	virtual sint32 calculateImageSize(LatteTextureLoaderCtx* textureLoader)
+	virtual uint64 calculateImageSize(LatteTextureLoaderCtx* textureLoader)
 	{
-		return getTexelCountX(textureLoader) * getTexelCountY(textureLoader) * getBytesPerTexel(textureLoader);
+		const sint32 texelCountX = getTexelCountX(textureLoader);
+		const sint32 texelCountY = getTexelCountY(textureLoader);
+		const sint32 bytesPerTexel = getBytesPerTexel(textureLoader);
+		if (texelCountX <= 0 || texelCountY <= 0 || bytesPerTexel <= 0)
+			return 0;
+		const uint64 maxValue = std::numeric_limits<uint64>::max();
+		const uint64 width = (uint64)texelCountX;
+		const uint64 height = (uint64)texelCountY;
+		const uint64 bytes = (uint64)bytesPerTexel;
+		if (width > maxValue / height)
+			return maxValue;
+		const uint64 texelCount = width * height;
+		if (texelCount > maxValue / bytes)
+			return maxValue;
+		return texelCount * bytes;
 	}
 
 	// decode loop
