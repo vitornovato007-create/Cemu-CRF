@@ -74,7 +74,6 @@ VKFUNC_INSTANCE(vkDeviceWaitIdle);
 VKFUNC_INSTANCE(vkCreateDebugReportCallbackEXT);
 
 VKFUNC_INSTANCE(vkGetPhysicalDeviceToolPropertiesEXT);
-VKFUNC_INSTANCE(vkSetDebugUtilsObjectNameEXT);
 
 //VKFUNC_INSTANCE(vkCreateDebugReportCallbackEXT);
 
