@@ -44,10 +44,15 @@ void VKRSynchronizedRingAllocator::addUploadBufferSyncPoint(AllocatorBuffer_t& b
 
 void VKRSynchronizedRingAllocator::allocateAdditionalUploadBuffer(uint32 sizeRequiredForAlloc)
 {
-	// calculate buffer size, should be a multiple of bufferAllocSize that is at least as large as sizeRequiredForAlloc
-	uint32 bufferAllocSize = m_minimumBufferAllocSize;
-	while (bufferAllocSize < sizeRequiredForAlloc)
-		bufferAllocSize += m_minimumBufferAllocSize;
+	// Round up in 64-bit arithmetic so a near-limit reservation cannot wrap
+	// the uint32 buffer size and loop forever.
+	if (m_minimumBufferAllocSize == 0)
+		throw std::runtime_error("Vulkan upload allocator has a zero minimum buffer size");
+	const uint64 minimumBufferSize = m_minimumBufferAllocSize;
+	const uint64 roundedBufferSize = ((uint64)sizeRequiredForAlloc + minimumBufferSize - 1) / minimumBufferSize * minimumBufferSize;
+	if (roundedBufferSize == 0 || roundedBufferSize > std::numeric_limits<uint32>::max())
+		throw std::runtime_error("Vulkan upload buffer allocation exceeds the allocator limit");
+	const uint32 bufferAllocSize = (uint32)roundedBufferSize;
 
 	AllocatorBuffer_t newBuffer{};
 	newBuffer.writeIndex = 0;
@@ -109,10 +114,11 @@ VKRSynchronizedRingAllocator::AllocatorReservation_t VKRSynchronizedRingAllocato
 		}
 		else
 			distanceToSyncPoint = 0xFFFFFFFF;
-		uint32 spaceNeeded = alignmentPadding + size;
-		if (spaceNeeded > distanceToSyncPoint)
+		const uint64 spaceNeeded64 = (uint64)alignmentPadding + size;
+		if (spaceNeeded64 > distanceToSyncPoint || spaceNeeded64 > std::numeric_limits<uint32>::max())
 			continue; // not enough space in current buffer
-		if ((itr.writeIndex + spaceNeeded) > itr.size)
+		uint32 spaceNeeded = (uint32)spaceNeeded64;
+		if ((uint64)itr.writeIndex + spaceNeeded > itr.size)
 		{
 			// wrap-around
 			spaceNeeded = size;
@@ -530,7 +536,7 @@ size_t VKRMemoryManager::GetTotalMemoryForBufferType(VkBufferUsageFlags usage, V
 	size_t total = 0;
 	for (auto heapIndex : list_heapIndices)
 	{
-		if (heapIndex > memProperties.memoryHeapCount)
+		if (heapIndex >= memProperties.memoryHeapCount)
 			continue;
 		total += memProperties.memoryHeaps[heapIndex].size;
 	}
