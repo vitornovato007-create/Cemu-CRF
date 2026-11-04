@@ -105,12 +105,8 @@ bool LatteGSCopyShaderParser_parseClauseVtx(LatteParsedGSCopyShader* shaderConte
 			uint32 constNoStride = (word2>>18)&0x1;
 			uint32 srcGpr = (word0>>16)&0x7F;
 			uint32 srcRel = (word0>>23)&1;
-			if( srcRel != 0 )
-				debugBreakpoint();
 			uint32 destGpr = (word1>>0)&0x7F;
 			uint32 destRel = (word1>>7)&1;
-			if( destRel != 0 )
-				debugBreakpoint();
 			uint32 dstSelX = (word1>>9)&0x7;
 			uint32 dstSelY = (word1>>12)&0x7;
 			uint32 dstSelZ = (word1>>15)&0x7;
@@ -121,19 +117,15 @@ bool LatteGSCopyShaderParser_parseClauseVtx(LatteParsedGSCopyShader* shaderConte
 			uint32 srcSelZ = 0;
 			uint32 srcSelW = 0;
 
-			if( bufferId != 0x9F )
+			if (srcRel != 0 || destRel != 0 || bufferId != 0x9F || endianSwap != 0 ||
+				fetchType != 2 || srcSelX != 0 || srcGpr != 0 ||
+				dstSelX != 0 || dstSelY != 1 || dstSelZ != 2 || dstSelW != 3)
 			{
-				debugBreakpoint(); // data not fetched from GS ring buffer
+				cemuLog_log(LogType::Force,
+					"Copy shader VTX clause uses unsupported fetch fields: buffer={}, fetchType={}, srcGpr={}, srcRel={}, destRel={}, endianSwap={}, selectors={}/{}/{}/{}",
+					bufferId, fetchType, srcGpr, srcRel, destRel, endianSwap, dstSelX, dstSelY, dstSelZ, dstSelW);
 				return false;
 			}
-			if( endianSwap != 0 )
-				debugBreakpoint();
-			if( fetchType != 2 )
-				debugBreakpoint();
-			if( srcSelX != 0 || srcGpr != 0 )
-				debugBreakpoint();
-			if( dstSelX != 0 || dstSelY != 1 || dstSelZ != 2 || dstSelW != 3 )
-				debugBreakpoint();
 			// remember imported parameter
 			if (!LatteGSCopyShaderParser_addFetchedParam(shaderContext, offset, destGpr))
 				return false;
@@ -148,7 +140,7 @@ bool LatteGSCopyShaderParser_parseClauseVtx(LatteParsedGSCopyShader* shaderConte
 
 LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint32 programSize)
 {
-	if (programData == nullptr || programSize < 8 || (programSize & 3) != 0)
+	if (programData == nullptr || programSize < 8 || (programSize & 7) != 0)
 	{
 		cemuLog_log(LogType::Force, "Copy shader parser received invalid program buffer: dataNull={}, programBytes={}", programData == nullptr, programSize);
 		return nullptr;
@@ -156,6 +148,7 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 	LatteParsedGSCopyShader* shaderContext = new LatteParsedGSCopyShader();
 	shaderContext->numParam = 0;
 	// parse control flow instructions
+	bool foundEndOfProgram = false;
 	for(uint32 i=0; i<programSize/8; i++)
 	{
 		uint32 cfWord0, cfWord1;
@@ -178,8 +171,12 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 			else if( cf_inst23_7 == GPU7_CF_INST_NOP )
 			{
 				// nop
-				if( ((cfWord1>>0)&7) != 0 )
-					debugBreakpoint(); // pop count is not zero, 
+				if (((cfWord1 >> 0) & 7) != 0)
+				{
+					cemuLog_log(LogType::Force, "Copy shader NOP clause has unsupported non-zero pop count");
+					delete shaderContext;
+					return nullptr;
+				} 
 			}
 			else if( cf_inst23_7 == GPU7_CF_INST_EXPORT || cf_inst23_7 == GPU7_CF_INST_EXPORT_DONE )
 			{
@@ -187,8 +184,12 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 				uint32 edType = (cfWord0>>13)&0x3;
 				uint32 edIndexGpr = (cfWord0>>23)&0x7F;
 				uint32 edRWRel = (cfWord0>>22)&1;
-				if( edRWRel != 0 || edIndexGpr != 0 )
-					debugBreakpoint();
+				if (edRWRel != 0 || edIndexGpr != 0)
+				{
+					cemuLog_log(LogType::Force, "Copy shader export uses unsupported relative/indexed addressing: relative={}, indexGpr={}", edRWRel, edIndexGpr);
+					delete shaderContext;
+					return nullptr;
+				}
 				// set export component selection
 				uint8 exportComponentSel[4];
 				exportComponentSel[0] = (cfWord1>>0)&0x7;
@@ -208,7 +209,10 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 				}
 				else if (exportComponentSel[0] != 0 || exportComponentSel[1] != 1 || exportComponentSel[2] != 2 || exportComponentSel[3] != 3)
 				{
-					cemu_assert_debug(false);
+					cemuLog_log(LogType::Force, "Copy shader export uses unsupported component selectors: {}/{}/{}/{}",
+						exportComponentSel[0], exportComponentSel[1], exportComponentSel[2], exportComponentSel[3]);
+					delete shaderContext;
+					return nullptr;
 				}
 				else
 				{
@@ -257,11 +261,13 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 			}
 			else
 			{
-				cemuLog_log(LogType::Force, "Copyshader: Unknown 23_7 clause 0x{:x} found", cf_inst23_7);
-				cemu_assert_debug(false);
+				cemuLog_log(LogType::Force, "Copy shader has unsupported control-flow clause 0x{:x}", cf_inst23_7);
+				delete shaderContext;
+				return nullptr;
 			}
-			if( isEndOfProgram )
+			if (isEndOfProgram)
 			{
+				foundEndOfProgram = true;
 				break;
 			}
 		}
@@ -273,6 +279,12 @@ LatteParsedGSCopyShader* LatteGSCopyShaderParser_parse(uint8* programData, uint3
 			delete shaderContext;
 			return nullptr;
 		}
+	}
+	if (!foundEndOfProgram)
+	{
+		cemuLog_log(LogType::Force, "Copy shader program is missing its end-of-program marker");
+		delete shaderContext;
+		return nullptr;
 	}
 	// verify if all registers are exported
 	for(sint32 i=0; i<shaderContext->numParam; i++)
