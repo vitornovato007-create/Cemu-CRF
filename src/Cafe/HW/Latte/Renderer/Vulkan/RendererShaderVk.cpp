@@ -457,8 +457,6 @@ void RendererShaderVk::CompileInternal(bool isRenderThread)
 	TBuiltInResource Resources = GetDefaultBuiltInResource();
 	std::string PreprocessedGLSL;
 
-	VulkanRenderer* vkr = (VulkanRenderer*)g_renderer.get();
-
 	EShMessages messagesPreprocess;
 	messagesPreprocess = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
 
