@@ -20,8 +20,8 @@ struct LatteTextureLoaderCtx
 	Latte::E_HWTILEMODE tileMode;
 	uint32 bpp;
 	uint8* inputData;
-	sint32 minOffsetOutdated;
-	sint32 maxOffsetOutdated;
+	uint32 minOffsetOutdated;
+	uint32 maxOffsetOutdated;
 	// calculated info
 	uint32 surfaceInfoHeight;
 	uint32 surfaceInfoDepth;
