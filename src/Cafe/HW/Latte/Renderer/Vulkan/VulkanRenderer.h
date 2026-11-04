@@ -498,7 +498,7 @@ private:
 
 	}m_featureControl{};
 	static bool CheckDeviceExtensionSupport(const VkPhysicalDevice device, FeatureControl& info);
-	static std::vector<const char*> CheckInstanceExtensionSupport(FeatureControl& info);
+	static std::vector<const char*> CheckInstanceExtensionSupport();
 
 	bool UpdateSwapchainProperties(bool mainWindow);
 	void SwapBuffer(bool mainWindow);
