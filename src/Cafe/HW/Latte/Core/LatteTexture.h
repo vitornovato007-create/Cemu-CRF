@@ -332,6 +332,20 @@ struct LatteTextureLifecycleDiagnostics
 
 // Atomic lifetime counters; safe to read from the Android diagnostics thread.
 LatteTextureLifecycleDiagnostics LatteTexture_GetLifecycleDiagnostics();
+struct LatteTextureLoadDiagnostics
+{
+	uint64 sliceLoadAttempts{};
+	uint64 decoderUnavailable{};
+	uint64 decodeCalls{};
+	uint64 decodedBytes{};
+	uint64 uploadBufferBytesRequested{};
+	uint64 uploadBufferAllocationFailures{};
+	uint64 rendererUploadCalls{};
+	uint64 rendererUploadBytes{};
+};
+
+// Process-lifetime texture decode/upload counters; independent of Vulkan Validation.
+LatteTextureLoadDiagnostics LatteTextureLoader_GetDiagnostics();
 
 void LatteTexture_init();
 void LatteTexture_updateTextures();
