@@ -402,14 +402,14 @@ void RendererShaderVk::CompileSafely(bool isRenderThread)
 		cemuLog_log(LogType::Force,
 			"Vulkan shader compilation aborted by exception: stage={}, shader={:016x}_{:016x}, error={}",
 			(uint32)GetType(), m_baseHash, m_auxHash, e.what());
-		FinishCompilation();
+		m_glslCode.clear();
 	}
 	catch (...)
 	{
 		cemuLog_log(LogType::Force,
 			"Vulkan shader compilation aborted by unknown exception: stage={}, shader={:016x}_{:016x}",
 			(uint32)GetType(), m_baseHash, m_auxHash);
-		FinishCompilation();
+		m_glslCode.clear();
 	}
 }
 
