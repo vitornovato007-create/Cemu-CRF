@@ -1176,28 +1176,35 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 		}
 	}
 
-	uint32 size;
+	if (width <= 0 || height <= 0)
+	{
+		cemuLog_log(LogType::Force, "Screenshot: invalid readback extent {}x{}", width, height);
+		cleanupScreenshotResources();
+		return;
+	}
+	uint64 size64 = 0;
 	switch (format)
 	{
 	case VK_FORMAT_R8G8B8A8_UNORM:
 	case VK_FORMAT_R8G8B8A8_SRGB:
-		size = 4 * width * height;
+		size64 = 4ull * (uint64)width * (uint64)height;
 		break;
 	case VK_FORMAT_R8G8B8_UNORM:
 	case VK_FORMAT_R8G8B8_SRGB:
-		size = 3 * width * height;
+		size64 = 3ull * (uint64)width * (uint64)height;
 		break;
 	default:
-		size = 0;
+		size64 = 0;
 	}
 
-	if (size == 0)
+	if (size64 == 0 || size64 > std::numeric_limits<uint32>::max())
 	{
-		cemuLog_log(LogType::Force, "Screenshot: unsupported readback format {} ({}x{})", (sint32)format, width, height);
+		cemuLog_log(LogType::Force, "Screenshot: unsupported or oversized readback format {} ({}x{}, bytes={})", (sint32)format, width, height, size64);
 		cemu_assert_debug(false);
 		cleanupScreenshotResources();
 		return;
 	}
+	const uint32 size = (uint32)size64;
 
 	VkBufferImageCopy region{};
 	region.bufferOffset = 0;
