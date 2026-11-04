@@ -217,6 +217,12 @@ RendererShaderVk* rectsEmulationGS_generate(LatteDecompilerShader* vertexShader,
 
 	auto vkShader = new RendererShaderVk(RendererShader::ShaderType::kGeometry, 0, 0, false, false, gsSrc);
 	vkShader->PreponeCompilation(true);
+	if (!vkShader->IsCompiled())
+	{
+		cemuLog_log(LogType::Force, "Rectangle-emulation geometry shader compilation failed; refusing to create a pipeline with a null shader module");
+		delete vkShader;
+		return nullptr;
+	}
 	return vkShader;
 }
 
@@ -1043,13 +1049,27 @@ bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool show
 	}
 	else
 	{
-		// if some shader stages are not compiled yet, compile them now
+		// If some shader stages are not compiled yet, compile them now.
 		if (m_vkVertexShader && m_vkVertexShader->IsCompiled() == false)
 			m_vkVertexShader->PreponeCompilation(isRenderThread);
 		if (m_vkPixelShader && m_vkPixelShader->IsCompiled() == false)
 			m_vkPixelShader->PreponeCompilation(isRenderThread);
 		if (m_vkGeometryShader && m_vkGeometryShader->IsCompiled() == false)
 			m_vkGeometryShader->PreponeCompilation(isRenderThread);
+	}
+
+	// A completed compilation can still have failed. Do not pass null shader
+	// modules to vkCreateGraphicsPipelines.
+	if ((m_vkVertexShader && !m_vkVertexShader->IsCompiled()) ||
+		(m_vkPixelShader && !m_vkPixelShader->IsCompiled()) ||
+		(m_vkGeometryShader && !m_vkGeometryShader->IsCompiled()))
+	{
+		cemuLog_log(LogType::Force,
+			"Graphics pipeline skipped because one or more shader modules failed to compile (VS={}, PS={}, GS={})",
+			m_vkVertexShader ? (m_vkVertexShader->GetShaderModule() != VK_NULL_HANDLE) : true,
+			m_vkPixelShader ? (m_vkPixelShader->GetShaderModule() != VK_NULL_HANDLE) : true,
+			m_vkGeometryShader ? (m_vkGeometryShader->GetShaderModule() != VK_NULL_HANDLE) : true);
+		return true;
 	}
 
 	if (shaderStages.empty())
