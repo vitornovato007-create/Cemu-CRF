@@ -421,7 +421,7 @@ namespace LatteDecompiler
 	{
 		auto* src = shaderContext->shaderSource;
 		LatteShaderPSInputTable* psInputTable = LatteSHRC_GetPSInputTable();
-		std::array<bool, 128> emittedSemantics{};
+		std::array<bool, 256> emittedSemantics{};
 		for (sint32 i = 0; i < psInputTable->count; i++)
 		{
 			const uint32 semanticId = psInputTable->import[i].semanticId;
