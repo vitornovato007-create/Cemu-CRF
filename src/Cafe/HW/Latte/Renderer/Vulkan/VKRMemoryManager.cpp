@@ -460,6 +460,8 @@ size_t VKRMemoryManager::GetTotalMemoryForBufferType(VkBufferUsageFlags usage, V
 
 bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
+	buffer = VK_NULL_HANDLE;
+	bufferMemory = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.usage = usage;
@@ -487,10 +489,14 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
 		return false;
 	}
-	if (vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0) != VK_SUCCESS)
+	VkResult bindResult = vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0);
+	if (bindResult != VK_SUCCESS)
 	{
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
-		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBuffer)");
+		vkFreeMemory(m_vkr->GetLogicalDevice(), bufferMemory, nullptr);
+		buffer = VK_NULL_HANDLE;
+		bufferMemory = VK_NULL_HANDLE;
+		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBuffer): VkResult {}", (sint32)bindResult);
 		return false;
 	}
 	return true;
@@ -498,6 +504,8 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 
 bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
+	buffer = VK_NULL_HANDLE;
+	bufferMemory = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.usage = usage;
@@ -543,10 +551,14 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
 		return false;
 	}
-	if (vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0) != VK_SUCCESS)
+	VkResult bindResult = vkBindBufferMemory(m_vkr->GetLogicalDevice(), buffer, bufferMemory, 0);
+	if (bindResult != VK_SUCCESS)
 	{
 		vkDestroyBuffer(m_vkr->GetLogicalDevice(), buffer, nullptr);
-		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBufferFromHostMemory)");
+		vkFreeMemory(m_vkr->GetLogicalDevice(), bufferMemory, nullptr);
+		buffer = VK_NULL_HANDLE;
+		bufferMemory = VK_NULL_HANDLE;
+		cemuLog_log(LogType::Force, "Failed to bind buffer (CreateBufferFromHostMemory): VkResult {}", (sint32)bindResult);
 		return false;
 	}
 	return true;
