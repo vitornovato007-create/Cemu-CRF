@@ -12,6 +12,33 @@ LatteTextureReadbackInfoVk::~LatteTextureReadbackInfoVk()
 {
 }
 
+uint8* LatteTextureReadbackInfoVk::GetData()
+{
+	if (m_buffer_ptr == nullptr || m_bufferMemory == VK_NULL_HANDLE || m_transferSize == 0)
+		throw std::runtime_error("Vulkan texture readback has no valid mapped buffer range");
+	if ((uint64)m_buffer_offset + m_transferSize > m_bufferSize)
+		throw std::runtime_error("Vulkan texture readback range exceeds the mapped buffer");
+
+	const auto renderer = VulkanRenderer::GetInstance();
+	const VkDeviceSize atomSize = renderer->GetNonCoherentAtomSize() ? renderer->GetNonCoherentAtomSize() : 1;
+	const VkDeviceSize alignedOffset = ((VkDeviceSize)m_buffer_offset / atomSize) * atomSize;
+	const VkDeviceSize requestedEnd = (VkDeviceSize)m_buffer_offset + m_transferSize;
+	const VkDeviceSize alignedEnd = ((requestedEnd + atomSize - 1) / atomSize) * atomSize;
+
+	VkMappedMemoryRange range{};
+	range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	range.memory = m_bufferMemory;
+	range.offset = alignedOffset;
+	range.size = alignedEnd <= m_bufferSize ? alignedEnd - alignedOffset : VK_WHOLE_SIZE;
+	const VkResult invalidateResult = vkInvalidateMappedMemoryRanges(m_device, 1, &range);
+	if (invalidateResult != VK_SUCCESS)
+	{
+		cemuLog_log(LogType::Force, "Vulkan texture readback cache invalidation failed: VkResult={}, offset={}, transferBytes={}, atomSize={}", (sint32)invalidateResult, m_buffer_offset, m_transferSize, atomSize);
+		throw std::runtime_error(fmt::format("Vulkan texture readback invalidation failed: VkResult={}", (sint32)invalidateResult));
+	}
+	return m_buffer_ptr + m_buffer_offset;
+}
+
 uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 {
 	const auto* baseTexture = (LatteTextureVk*)textureView->baseTexture;
