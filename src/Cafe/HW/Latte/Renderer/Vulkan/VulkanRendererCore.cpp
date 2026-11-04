@@ -244,10 +244,7 @@ void compilePipelineThread_queue(PipelineCompiler* v)
 // non-essential means that skipping these drawcalls shouldn't lead to permanently corrupted graphics
 bool VulkanRenderer::IsAsyncPipelineAllowed(uint32 numIndices)
 {
-	// frame debuggers dont handle async well (as of 2020)
-	if (IsDebugUtilsEnabled() && vkSetDebugUtilsObjectNameEXT)
-		return false;
-
+	// Debug-utils based frame-debugger detection was removed with the optional extension.
 	CachedFBOVk* currentFBO = m_state.activeFBO;
 	auto fboExtend = currentFBO->GetExtend();
 
