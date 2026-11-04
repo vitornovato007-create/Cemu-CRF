@@ -401,15 +401,19 @@ namespace LatteDecompiler
 			src->addFmt(" vec4 passParameterSem{};" _CRLF, psInputTable->import[psInputIndex].semanticId);
 		}
 
-		// TODO: fix this
-		for (uint32 i = 0; i < 32; i++)
+		// Only fill interface locations that actually exist in the pixel-shader
+		// input table. Emitting dummy outputs for all 32 possible slots needlessly
+		// occupies locations that transform-feedback outputs also need.
+		const uint32 dummyParameterCount = (std::min<uint32>)(
+			(uint32)psInputTable->count, (uint32)activePassParams.size());
+		for (uint32 i = 0; i < dummyParameterCount; i++)
 		{
 			if (!activePassParams[i])
 				src->addFmt("layout(location = {0}) out vec4 dummyPassParameterSem{0};" _CRLF, i);
 		}
 
 		src->add("void dummyPassParamInit() {" _CRLF);
-		for (uint32 i = 0; i < 32; i++)
+		for (uint32 i = 0; i < dummyParameterCount; i++)
 		{
 			if (!activePassParams[i])
 				src->addFmt("dummyPassParameterSem{} = vec4(0.0, 0.0, 0.0, 0.0);" _CRLF, i);
@@ -595,7 +599,31 @@ namespace LatteDecompiler
 			}
 			else
 			{
-				sint32 locationOffset = 0; // glslang wants a location for xfb outputs
+				// Transform-feedback interface blocks share the stage's output
+				// location namespace. Start after the outputs already declared by
+				// this stage instead of hard-coding location zero.
+				sint32 locationOffset = 0;
+				if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex)
+				{
+					if (decompilerContext->options->usesGeometryShader)
+						locationOffset = (sint32)decompilerContext->shader->ringParameterCount;
+					else
+					{
+						auto* psInputTable = LatteSHRC_GetPSInputTable();
+						locationOffset = (sint32)(std::min<uint32>)(
+							(uint32)psInputTable->count, 32u);
+					}
+				}
+				else if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry &&
+					decompilerContext->parsedGSCopyShader)
+				{
+					for (sint32 p = 0; p < decompilerContext->parsedGSCopyShader->numParam; p++)
+					{
+						const auto& parameter = decompilerContext->parsedGSCopyShader->paramMapping[p];
+						if (parameter.exportType == 2 && parameter.exportParam < 16)
+							locationOffset = (std::max)(locationOffset, (sint32)parameter.exportParam + 1);
+					}
+				}
 				for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
 				{
 					if (!decompilerContext->output->streamoutBufferWriteMask[i])
