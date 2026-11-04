@@ -624,10 +624,17 @@ VulkanRenderer::VulkanRenderer()
 	m_uniformVarBufferPtr = (uint8*)mapBufferOrThrow(m_uniformVarBufferMemory, "uniform ring buffer");
 
 	// texture readback buffer
-	m_textureReadbackBufferMemoryIsCoherent = memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory);
-	if (!m_textureReadbackBufferMemoryIsCoherent &&
-		!memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_textureReadbackBuffer, m_textureReadbackBufferMemory))
+	VkMemoryPropertyFlags readbackMemoryProperties = 0;
+	bool readbackBufferCreated = memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		m_textureReadbackBuffer, m_textureReadbackBufferMemory, &readbackMemoryProperties);
+	if (!readbackBufferCreated)
+		readbackBufferCreated = memoryManager->CreateBuffer(TEXTURE_READBACK_SIZE, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			m_textureReadbackBuffer, m_textureReadbackBufferMemory, &readbackMemoryProperties);
+	if (!readbackBufferCreated)
 		throw std::runtime_error("Unable to allocate Vulkan texture readback buffer");
+	m_textureReadbackBufferMemoryIsCoherent = HAS_FLAG(readbackMemoryProperties, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	m_textureReadbackBufferPtr = (uint8*)mapBufferOrThrow(m_textureReadbackBufferMemory, "texture readback buffer");
 
 	// transform feedback ringbuffer
@@ -636,10 +643,17 @@ VulkanRenderer::VulkanRenderer()
 		throw std::runtime_error("Unable to allocate Vulkan transform-feedback ring buffer");
 
 	// occlusion query result buffer
-	m_occlusionQueries.queryResultsMemoryIsCoherent = memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults);
-	if (!m_occlusionQueries.queryResultsMemoryIsCoherent &&
-		!memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults))
+	VkMemoryPropertyFlags queryMemoryProperties = 0;
+	bool queryBufferCreated = memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+		m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults, &queryMemoryProperties);
+	if (!queryBufferCreated)
+		queryBufferCreated = memoryManager->CreateBuffer(OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64), VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+			m_occlusionQueries.bufferQueryResults, m_occlusionQueries.memoryQueryResults, &queryMemoryProperties);
+	if (!queryBufferCreated)
 		throw std::runtime_error("Unable to allocate Vulkan occlusion query result buffer");
+	m_occlusionQueries.queryResultsMemoryIsCoherent = HAS_FLAG(queryMemoryProperties, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	m_occlusionQueries.ptrQueryResults = (uint64*)mapBufferOrThrow(m_occlusionQueries.memoryQueryResults, "occlusion query result buffer");
 	}
 	catch (...)
