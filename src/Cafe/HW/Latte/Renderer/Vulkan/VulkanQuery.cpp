@@ -102,6 +102,26 @@ void LatteQueryObjectVk::handleFinishedFragments()
 			break;
 		if (!m_rendererVk->HasCommandBufferFinished(it.m_finishCommandBuffer))
 			break;
+
+		// The query-result buffer may use host-visible but non-coherent memory
+		// when the preferred coherent memory type is unavailable.
+		const VkDeviceSize atomSize = m_rendererVk->GetNonCoherentAtomSize() ? m_rendererVk->GetNonCoherentAtomSize() : 1;
+		const VkDeviceSize resultOffset = (VkDeviceSize)it.queryIndex * sizeof(uint64);
+		const VkDeviceSize alignedOffset = (resultOffset / atomSize) * atomSize;
+		const VkDeviceSize resultEnd = resultOffset + sizeof(uint64);
+		const VkDeviceSize alignedEnd = ((resultEnd + atomSize - 1) / atomSize) * atomSize;
+		const VkDeviceSize bufferSize = (VkDeviceSize)OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64);
+		VkMappedMemoryRange invalidateRange{};
+		invalidateRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+		invalidateRange.memory = m_rendererVk->m_occlusionQueries.memoryQueryResults;
+		invalidateRange.offset = alignedOffset;
+		invalidateRange.size = alignedEnd <= bufferSize ? alignedEnd - alignedOffset : VK_WHOLE_SIZE;
+		const VkResult invalidateResult = vkInvalidateMappedMemoryRanges(m_rendererVk->GetLogicalDevice(), 1, &invalidateRange);
+		if (invalidateResult != VK_SUCCESS)
+		{
+			cemuLog_log(LogType::Force, "Vulkan occlusion-query result invalidation failed: VkResult={}, queryIndex={}, offset={}, atomSize={}", (sint32)invalidateResult, it.queryIndex, alignedOffset, atomSize);
+			throw std::runtime_error(fmt::format("Vulkan occlusion-query result invalidation failed: VkResult={}", (sint32)invalidateResult));
+		}
 		m_acccumulatedSum += m_rendererVk->m_occlusionQueries.ptrQueryResults[it.queryIndex];
 		releaseQueryIndex(it.queryIndex);
 		list_queryFragments.erase(list_queryFragments.begin());
