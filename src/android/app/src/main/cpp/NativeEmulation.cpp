@@ -540,33 +540,17 @@ namespace NativeEmulation
         report.append("\n");
     }
 
-    std::string GetVulkanDiagnosticLog()
+    std::string GetMonitorLog()
     {
         std::string report;
         report.reserve(1024 * 1024);
-        report.append("Cemu Android diagnostic report\n");
+        report.append("Cemu Android Monitor 2.0 report\n");
         report.append("===============================\n");
         report.append("Capture source: Cemu native LogCallbacks (not Android-wide Logcat).\n");
-        report.append("Persistent log: app-private vulkan-diagnostic.log with one rotated .previous segment.\n");
+        report.append("Persistent log: app-private monitor-2.0.log with one rotated .previous segment.\n");
         report.append("Each active/previous segment is bounded to 32 MiB; export combines both when available.\n");
-        report.append("Vulkan validation UI preference currently enabled: ");
-        report.append(cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? "yes (requested for next renderer initialization)\n" : "no\n");
-        const auto validation = VulkanRenderer_GetValidationDiagnostics();
-        report.append("Last Vulkan renderer initialization attempted: ");
-        report.append(validation.initializationAttempted ? "yes\n" : "no\n");
-        report.append("Validation layer status: ");
-        if (!validation.initializationAttempted)
-            report.append("unknown (renderer has not initialized in this process)\n");
-        else if (!validation.validationRequested)
-            report.append("not requested\n");
-        else
-            report.append(validation.validationLayerEnabled ? "loaded\n" : "not loaded\n");
-        report.append(fmt::format("VK_EXT_debug_utils available: {}\n", validation.debugUtilsAvailable ? "yes" : "no"));
-        report.append(fmt::format("Vulkan debug messenger created: {}\n", validation.debugMessengerCreated ? "yes" : "no"));
-        if (validation.validationRequested)
-            report.append(fmt::format("Debug messenger VkResult: {}\n\n", validation.debugMessengerResult));
-        else
-            report.append("\n");
+        report.append("Monitor 2.0 capture enabled: ");
+        report.append(cemuLog_isLoggingEnabled(LogType::Monitor) ? "yes\n\n" : "no\n\n");
         if (auto* renderer = g_renderer ? dynamic_cast<VulkanRenderer*>(g_renderer.get()) : nullptr)
         {
             if (auto* memoryManager = renderer->GetMemoryManager())
@@ -752,7 +736,7 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_initializeEmulation([[maybe_
 	NativeEmulation::createCemuDirectories();
 	NetworkConfig::LoadOnce();
 	ActiveSettings::Init();
-	NativeEmulation::s_androidLogCapture.StartPersistentCapture(ActiveSettings::GetUserDataPath("vulkan-diagnostic.log"));
+	NativeEmulation::s_androidLogCapture.StartPersistentCapture(ActiveSettings::GetUserDataPath("monitor-2.0.log"));
 	cemuLog_registerLogCallbacks(&NativeEmulation::s_androidLogCapture);
 	LatteOverlay_init();
 	CemuCommonInit();
@@ -803,27 +787,27 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_supportsLoadingCustomDriver(
 
 
 extern "C" [[maybe_unused]] JNIEXPORT jstring JNICALL
-Java_info_cemu_cemu_nativeinterface_NativeEmulation_getVulkanDiagnosticLog(JNIEnv* env, [[maybe_unused]] jclass clazz)
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_getMonitorLog(JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
-    return JNIUtils::toJString(env, NativeEmulation::GetVulkanDiagnosticLog());
+    return JNIUtils::toJString(env, NativeEmulation::GetMonitorLog());
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
-Java_info_cemu_cemu_nativeinterface_NativeEmulation_setVulkanValidationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setMonitorEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean enabled)
 {
     uint64 flags = s_loggingFlagMask;
-    const uint64 validationFlag = cemuLog_getFlag(LogType::VulkanValidation);
+    const uint64 monitorFlag = cemuLog_getFlag(LogType::Monitor);
     if (enabled)
-        flags |= validationFlag;
+        flags |= monitorFlag;
     else
-        flags &= ~validationFlag;
+        flags &= ~monitorFlag;
     cemuLog_setActiveLoggingFlags(flags);
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
-Java_info_cemu_cemu_nativeinterface_NativeEmulation_isVulkanValidationEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_isMonitorEnabled([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz)
 {
-    return cemuLog_isLoggingEnabled(LogType::VulkanValidation) ? JNI_TRUE : JNI_FALSE;
+    return cemuLog_isLoggingEnabled(LogType::Monitor) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
