@@ -75,6 +75,7 @@ public:
 
 private:
 	void CompileInternal(bool isRenderThread);
+	void CompileSafely(bool isRenderThread);
 
 	void FinishCompilation();
 
