@@ -45,17 +45,17 @@ void SwapchainInfoVk::Create()
 
 	VkResult result = vkCreateSwapchainKHR(m_logicalDevice, &create_info, nullptr, &m_swapchain);
 	if (result != VK_SUCCESS)
-		UnrecoverableError("Error attempting to create a swapchain");
+		UnrecoverableError(fmt::format("vkCreateSwapchainKHR failed: VkResult={}, extent={}x{}, imageCount={}, format={}", (sint32)result, m_actualExtent.width, m_actualExtent.height, image_count, (sint32)m_surfaceFormat.format).c_str());
 
 	result = vkGetSwapchainImagesKHR(m_logicalDevice, m_swapchain, &image_count, nullptr);
 	if (result != VK_SUCCESS)
-		UnrecoverableError("Error attempting to retrieve the count of swapchain images");
+		UnrecoverableError(fmt::format("vkGetSwapchainImagesKHR(count) failed: VkResult={}", (sint32)result).c_str());
 
 
 	m_swapchainImages.resize(image_count);
 	result = vkGetSwapchainImagesKHR(m_logicalDevice, m_swapchain, &image_count, m_swapchainImages.data());
 	if (result != VK_SUCCESS)
-		UnrecoverableError("Error attempting to retrieve swapchain images");
+		UnrecoverableError(fmt::format("vkGetSwapchainImagesKHR(list) failed: VkResult={}, requestedCount={}", (sint32)result, image_count).c_str());
 	// create default renderpass
 	VkAttachmentDescription colorAttachment = {};
 	colorAttachment.format = m_surfaceFormat.format;
@@ -83,7 +83,7 @@ void SwapchainInfoVk::Create()
 	renderPassInfo.pSubpasses = &subpass;
 	result = vkCreateRenderPass(m_logicalDevice, &renderPassInfo, nullptr, &m_swapchainRenderPass);
 	if (result != VK_SUCCESS)
-		UnrecoverableError("Failed to create renderpass for swapchain");
+		UnrecoverableError(fmt::format("vkCreateRenderPass(swapchain) failed: VkResult={}, format={}", (sint32)result, (sint32)m_surfaceFormat.format).c_str());
 
 	// create swapchain image views
 	m_swapchainImageViews.resize(m_swapchainImages.size());
@@ -105,7 +105,7 @@ void SwapchainInfoVk::Create()
 		createInfo.subresourceRange.layerCount = 1;
 		result = vkCreateImageView(m_logicalDevice, &createInfo, nullptr, &m_swapchainImageViews[i]);
 		if (result != VK_SUCCESS)
-			UnrecoverableError("Failed to create imageviews for swapchain");
+			UnrecoverableError(fmt::format("vkCreateImageView(swapchain) failed: VkResult={}, imageIndex={}, format={}", (sint32)result, i, (sint32)m_surfaceFormat.format).c_str());
 	}
 
 	// create swapchain framebuffers
@@ -125,25 +125,29 @@ void SwapchainInfoVk::Create()
 		framebufferInfo.layers = 1;
 		result = vkCreateFramebuffer(m_logicalDevice, &framebufferInfo, nullptr, &m_swapchainFramebuffers[i]);
 		if (result != VK_SUCCESS)
-			UnrecoverableError("Failed to create framebuffer for swapchain");
+			UnrecoverableError(fmt::format("vkCreateFramebuffer(swapchain) failed: VkResult={}, imageIndex={}, extent={}x{}", (sint32)result, i, m_actualExtent.width, m_actualExtent.height).c_str());
 	}
 
 	m_presentSemaphores.resize(m_swapchainImages.size());
 	// create present semaphores
 	VkSemaphoreCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	for (auto& semaphore : m_presentSemaphores){
-		if (vkCreateSemaphore(m_logicalDevice, &info, nullptr, &semaphore) != VK_SUCCESS)
-			UnrecoverableError("Failed to create semaphore for swapchain present");
+	for (size_t i = 0; i < m_presentSemaphores.size(); ++i)
+	{
+		const VkResult semaphoreResult = vkCreateSemaphore(m_logicalDevice, &info, nullptr, &m_presentSemaphores[i]);
+		if (semaphoreResult != VK_SUCCESS)
+			UnrecoverableError(fmt::format("vkCreateSemaphore(swapchain present) failed: VkResult={}, semaphoreIndex={}", (sint32)semaphoreResult, i).c_str());
 	}
 
 	m_acquireSemaphores.resize(m_swapchainImages.size());
 	// create acquire semaphores
 	info = {};
 	info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	for (auto& semaphore : m_acquireSemaphores){
-		if (vkCreateSemaphore(m_logicalDevice, &info, nullptr, &semaphore) != VK_SUCCESS)
-			UnrecoverableError("Failed to create semaphore for swapchain acquire");
+	for (size_t i = 0; i < m_acquireSemaphores.size(); ++i)
+	{
+		const VkResult semaphoreResult = vkCreateSemaphore(m_logicalDevice, &info, nullptr, &m_acquireSemaphores[i]);
+		if (semaphoreResult != VK_SUCCESS)
+			UnrecoverableError(fmt::format("vkCreateSemaphore(swapchain acquire) failed: VkResult={}, semaphoreIndex={}", (sint32)semaphoreResult, i).c_str());
 	}
 
 	VkFenceCreateInfo fenceInfo = {};
@@ -151,7 +155,7 @@ void SwapchainInfoVk::Create()
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	result = vkCreateFence(m_logicalDevice, &fenceInfo, nullptr, &m_imageAvailableFence);
 	if (result != VK_SUCCESS)
-		UnrecoverableError("Failed to create fence for swapchain");
+		UnrecoverableError(fmt::format("vkCreateFence(swapchain) failed: VkResult={}", (sint32)result).c_str());
 
 	m_acquireIndex = 0;
 	hasDefinedSwapchainImage = false;
@@ -206,14 +210,20 @@ bool SwapchainInfoVk::IsValid() const
 
 void SwapchainInfoVk::WaitAvailableFence()
 {
-	if(m_awaitableFence != VK_NULL_HANDLE)
-		vkWaitForFences(m_logicalDevice, 1, &m_awaitableFence, VK_TRUE, UINT64_MAX);
+	if (m_awaitableFence != VK_NULL_HANDLE)
+	{
+		const VkResult waitResult = vkWaitForFences(m_logicalDevice, 1, &m_awaitableFence, VK_TRUE, UINT64_MAX);
+		if (waitResult != VK_SUCCESS)
+			cemuLog_log(LogType::Force, "Swapchain vkWaitForFences failed: VkResult={}", (sint32)waitResult);
+	}
 	m_awaitableFence = VK_NULL_HANDLE;
 }
 
 void SwapchainInfoVk::ResetAvailableFence() const
 {
-	vkResetFences(m_logicalDevice, 1, &m_imageAvailableFence);
+	const VkResult resetResult = vkResetFences(m_logicalDevice, 1, &m_imageAvailableFence);
+	if (resetResult != VK_SUCCESS)
+		throw std::runtime_error(fmt::format("Swapchain vkResetFences failed: VkResult={}", (sint32)resetResult));
 }
 
 VkSemaphore SwapchainInfoVk::ConsumeAcquireSemaphore()
