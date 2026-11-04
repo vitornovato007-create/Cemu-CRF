@@ -46,6 +46,15 @@ namespace
 	std::atomic<sint32> s_debugMessengerResult{ VK_NOT_READY };
 }
 
+static void CheckVulkanResultForDiagnostics(VkResult result, const char* operation)
+{
+	if (result == VK_SUCCESS)
+		return;
+	const std::string message = fmt::format("{} failed with VkResult={}", operation, (sint32)result);
+	cemuLog_log(LogType::Force, "{}", message);
+	throw std::runtime_error(message);
+}
+
 VulkanValidationDiagnostics VulkanRenderer_GetValidationDiagnostics()
 {
 	VulkanValidationDiagnostics result;
@@ -2060,11 +2069,11 @@ void VulkanRenderer::InitFirstCommandBuffer()
 	m_commandBufferSyncIndex = 0;
 
 	m_state.currentCommandBuffer = m_commandBuffers[m_commandBufferIndex];
-	vkResetFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferIndex]);
+	CheckVulkanResultForDiagnostics(vkResetFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferIndex]), "vkResetFences");
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	vkBeginCommandBuffer(m_state.currentCommandBuffer, &beginInfo);
+	CheckVulkanResultForDiagnostics(vkBeginCommandBuffer(m_state.currentCommandBuffer, &beginInfo), "vkBeginCommandBuffer");
 
 	vkCmdSetViewport(m_state.currentCommandBuffer, 0, 1, &m_state.currentViewport);
 	vkCmdSetScissor(m_state.currentCommandBuffer, 0, 1, &m_state.currentScissorRect);
@@ -2125,7 +2134,7 @@ void VulkanRenderer::SubmitCommandBuffer(VkSemaphore signalSemaphore, VkSemaphor
 
 	occlusionQuery_notifyEndCommandBuffer();
 
-	vkEndCommandBuffer(m_state.currentCommandBuffer);
+	CheckVulkanResultForDiagnostics(vkEndCommandBuffer(m_state.currentCommandBuffer), "vkEndCommandBuffer");
 
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -2180,13 +2189,13 @@ void VulkanRenderer::SubmitCommandBuffer(VkSemaphore signalSemaphore, VkSemaphor
 
 
 	m_state.currentCommandBuffer = m_commandBuffers[m_commandBufferIndex];
-	vkResetFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferIndex]);
-	vkResetCommandBuffer(m_state.currentCommandBuffer, 0);
+	CheckVulkanResultForDiagnostics(vkResetFences(m_logicalDevice, 1, &m_cmd_buffer_fences[m_commandBufferIndex]), "vkResetFences");
+	CheckVulkanResultForDiagnostics(vkResetCommandBuffer(m_state.currentCommandBuffer, 0), "vkResetCommandBuffer");
 
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	vkBeginCommandBuffer(m_state.currentCommandBuffer, &beginInfo);
+	CheckVulkanResultForDiagnostics(vkBeginCommandBuffer(m_state.currentCommandBuffer, &beginInfo), "vkBeginCommandBuffer");
 
 	// make sure some states are set for this command buffer
 	vkCmdSetViewport(m_state.currentCommandBuffer, 0, 1, &m_state.currentViewport);
@@ -3052,7 +3061,11 @@ void VulkanRenderer::SwapBuffer(bool mainWindow)
 		if(chainInfo.m_queueDepth >= chainInfo.m_maxQueued)
 		{
 			uint64 waitFrameId = chainInfo.m_presentId - chainInfo.m_queueDepth;
-			vkWaitForPresentKHR(m_logicalDevice, chainInfo.m_swapchain, waitFrameId, 40'000'000);
+			const VkResult waitPresentResult = vkWaitForPresentKHR(m_logicalDevice, chainInfo.m_swapchain, waitFrameId, 40'000'000);
+			if (waitPresentResult == VK_ERROR_OUT_OF_DATE_KHR)
+				chainInfo.m_shouldRecreate = true;
+			else if (waitPresentResult != VK_SUCCESS && waitPresentResult != VK_TIMEOUT)
+				cemuLog_log(LogType::Force, "vkWaitForPresentKHR failed: VkResult={}, presentId={}", (sint32)waitPresentResult, waitFrameId);
 			chainInfo.m_queueDepth--;
 		}
 	}
