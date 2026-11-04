@@ -214,7 +214,10 @@ void SwapchainInfoVk::WaitAvailableFence()
 	{
 		const VkResult waitResult = vkWaitForFences(m_logicalDevice, 1, &m_awaitableFence, VK_TRUE, UINT64_MAX);
 		if (waitResult != VK_SUCCESS)
-			cemuLog_log(LogType::Force, "Swapchain vkWaitForFences failed: VkResult={}", (sint32)waitResult);
+		{
+			cemuLog_log(LogType::Force, "Swapchain acquire-fence wait failed: VkResult={}, fence={}, swapchain={}", (sint32)waitResult, (void*)m_awaitableFence, (void*)m_swapchain);
+			throw std::runtime_error(fmt::format("Swapchain acquire-fence wait failed: VkResult={}", (sint32)waitResult));
+		}
 	}
 	m_awaitableFence = VK_NULL_HANDLE;
 }
