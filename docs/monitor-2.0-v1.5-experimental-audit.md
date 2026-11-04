@@ -37,7 +37,10 @@ Arquivo: `src/Cafe/HW/Latte/Core/LatteTexture.cpp`
 
 ### 4. Buffer circular de Readback de 32 MiB
 
-Ainda não foi alterada a política de reutilização do buffer. O código possui uma fila FIFO de readbacks e cada item tem um ID de command buffer, `IsFinished()` e `ForceFinish()`. Porém, o índice circular é gerenciado em `VulkanRenderer::texture_createReadback`, e não existe ainda prova suficiente de que a região seja reutilizada antes de o consumidor copiar os dados para a memória guest.
+A política de reutilização ainda não foi alterada. O código possui uma fila FIFO de readbacks e cada item tem um ID de command buffer, `IsFinished()` e `ForceFinish()`. O índice circular é gerenciado em `VulkanRenderer::texture_createReadback`.
+
+- Foi adicionado um aviso limitado `[ReadbackRing]` quando o índice volta ao início do buffer de 32 MiB.
+- Esse aviso mede a ocorrência de wrap, mas não prova nem impede uma sobreposição com dados ainda aguardando consumo.
 
 Uma correção segura exige ligar a reserva do intervalo à liberação do item da fila. Simplesmente esperar o device idle não basta: uma transferência pode ter terminado e o resultado ainda estar aguardando processamento pela CPU.
 
