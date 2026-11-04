@@ -8,6 +8,12 @@ namespace
 	std::atomic<uint64> s_vkBufferCreateAttempts{ 0 };
 	std::atomic<uint64> s_vkBufferCreateSuccesses{ 0 };
 	std::atomic<uint64> s_vkBufferCreateFailures{ 0 };
+	std::atomic<uint64> s_vkBufferBytesRequested{ 0 };
+	std::atomic<uint64> s_vkBufferBytesAllocated{ 0 };
+	std::atomic<uint64> s_vkTextureHeapReservedBytes{ 0 };
+	std::atomic<uint64> s_vkTextureHeapChunks{ 0 };
+	std::atomic<uint64> s_vkTextureBytesCurrentlyAllocated{ 0 };
+	std::atomic<uint64> s_vkTextureAllocationsCurrentlyLive{ 0 };
 	std::atomic<uint64> s_vkImageAllocationAttempts{ 0 };
 	std::atomic<uint64> s_vkImageAllocationSuccesses{ 0 };
 	std::atomic<uint64> s_vkImageAllocationFailures{ 0 };
@@ -320,6 +326,8 @@ uint32 VkTextureChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumA
 			if (r != VK_SUCCESS)
 				continue;
 			m_list_chunkInfo[chunkIndex].mem = imageMemory;
+			s_vkTextureHeapReservedBytes.fetch_add(allocationSize, std::memory_order_relaxed);
+			s_vkTextureHeapChunks.fetch_add(1, std::memory_order_relaxed);
 			return allocationSize;
 		}
 		// attempt to allocate from host-local memory
@@ -335,6 +343,8 @@ uint32 VkTextureChunkedHeap::allocateNewChunk(uint32 chunkIndex, uint32 minimumA
 			if (r != VK_SUCCESS)
 				continue;
 			m_list_chunkInfo[chunkIndex].mem = imageMemory;
+			s_vkTextureHeapReservedBytes.fetch_add(allocationSize, std::memory_order_relaxed);
+			s_vkTextureHeapChunks.fetch_add(1, std::memory_order_relaxed);
 			return allocationSize;
 		}
 		// retry with smaller size if possible
@@ -490,6 +500,7 @@ size_t VKRMemoryManager::GetTotalMemoryForBufferType(VkBufferUsageFlags usage, V
 
 bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
+	s_vkBufferBytesRequested.fetch_add(size, std::memory_order_relaxed);
 	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
 	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return false; };
 	buffer = VK_NULL_HANDLE;
@@ -532,11 +543,13 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 		return recordFailure();
 	}
 	s_vkBufferCreateSuccesses.fetch_add(1, std::memory_order_relaxed);
+	s_vkBufferBytesAllocated.fetch_add(memRequirements.size, std::memory_order_relaxed);
 	return true;
 }
 
 bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
+	s_vkBufferBytesRequested.fetch_add(size, std::memory_order_relaxed);
 	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
 	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return false; };
 	buffer = VK_NULL_HANDLE;
@@ -597,6 +610,7 @@ bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSiz
 		return recordFailure();
 	}
 	s_vkBufferCreateSuccesses.fetch_add(1, std::memory_order_relaxed);
+	s_vkBufferBytesAllocated.fetch_add(memRequirements.size, std::memory_order_relaxed);
 	return true;
 }
 
@@ -672,6 +686,8 @@ VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 
 	s_vkImageAllocationSuccesses.fetch_add(1, std::memory_order_relaxed);
 	s_vkImageAllocationBytes.fetch_add(allocationSize, std::memory_order_relaxed);
+	s_vkTextureBytesCurrentlyAllocated.fetch_add(allocationSize, std::memory_order_relaxed);
+	s_vkTextureAllocationsCurrentlyLive.fetch_add(1, std::memory_order_relaxed);
 	return new VkImageMemAllocation(typeFilter, mem, allocationSize);
 }
 
@@ -683,6 +699,8 @@ void VKRMemoryManager::imageMemoryFree(VkImageMemAllocation* imageMemAllocation)
 		cemuLog_log(LogType::Force, "Internal texture heap error");
 		return;
 	}
+	s_vkTextureBytesCurrentlyAllocated.fetch_sub(imageMemAllocation->allocationSize, std::memory_order_relaxed);
+	s_vkTextureAllocationsCurrentlyLive.fetch_sub(1, std::memory_order_relaxed);
 	heapItr->second->freeMem(imageMemAllocation->mem);
 	delete imageMemAllocation;
 }
@@ -690,34 +708,19 @@ void VKRMemoryManager::imageMemoryFree(VkImageMemAllocation* imageMemAllocation)
 VulkanMemoryDiagnostics VKRMemoryManager::GetDiagnostics() const
 {
 	VulkanMemoryDiagnostics result;
-	for (const auto& heap : map_textureHeap)
-	{
-		uint32 heapSize = 0;
-		uint32 allocatedBytes = 0;
-		heap.second->getStatistics(heapSize, allocatedBytes);
-		result.textureHeapBytes += heapSize;
-		result.textureAllocatedBytes += allocatedBytes;
-		++result.textureHeapCount;
-	}
-	uint32 bufferCount = 0;
-	size_t totalBytes = 0;
-	size_t freeBytes = 0;
-	m_stagingBuffer.GetStats(bufferCount, totalBytes, freeBytes);
-	result.stagingBufferBytes = totalBytes;
-	result.stagingBufferFreeBytes = freeBytes;
-	m_indexBuffer.GetStats(bufferCount, totalBytes, freeBytes);
-	result.indexBufferBytes = totalBytes;
-	result.indexBufferFreeBytes = freeBytes;
-	m_vertexStrideMetalBuffer.GetStats(bufferCount, totalBytes, freeBytes);
-	result.strideBufferBytes = totalBytes;
-	result.strideBufferFreeBytes = freeBytes;
+	result.textureHeapReservedBytes = s_vkTextureHeapReservedBytes.load(std::memory_order_relaxed);
+	result.textureHeapChunks = s_vkTextureHeapChunks.load(std::memory_order_relaxed);
+	result.textureBytesCurrentlyAllocated = s_vkTextureBytesCurrentlyAllocated.load(std::memory_order_relaxed);
+	result.textureAllocationsCurrentlyLive = s_vkTextureAllocationsCurrentlyLive.load(std::memory_order_relaxed);
+	result.bufferBytesRequested = s_vkBufferBytesRequested.load(std::memory_order_relaxed);
+	result.bufferBytesAllocatedCumulative = s_vkBufferBytesAllocated.load(std::memory_order_relaxed);
 	result.bufferCreateAttempts = s_vkBufferCreateAttempts.load(std::memory_order_relaxed);
 	result.bufferCreateSuccesses = s_vkBufferCreateSuccesses.load(std::memory_order_relaxed);
 	result.bufferCreateFailures = s_vkBufferCreateFailures.load(std::memory_order_relaxed);
 	result.imageAllocationAttempts = s_vkImageAllocationAttempts.load(std::memory_order_relaxed);
 	result.imageAllocationSuccesses = s_vkImageAllocationSuccesses.load(std::memory_order_relaxed);
 	result.imageAllocationFailures = s_vkImageAllocationFailures.load(std::memory_order_relaxed);
-	result.imageAllocationBytes = s_vkImageAllocationBytes.load(std::memory_order_relaxed);
+	result.imageAllocationBytesCumulative = s_vkImageAllocationBytes.load(std::memory_order_relaxed);
 	return result;
 }
 
