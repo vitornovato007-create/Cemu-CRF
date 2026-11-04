@@ -113,7 +113,7 @@ void LatteQueryObjectVk::handleFinishedFragments()
 			const VkDeviceSize alignedOffset = (resultOffset / atomSize) * atomSize;
 			const VkDeviceSize resultEnd = resultOffset + sizeof(uint64);
 			const VkDeviceSize alignedEnd = ((resultEnd + atomSize - 1) / atomSize) * atomSize;
-			const VkDeviceSize bufferSize = (VkDeviceSize)OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64);
+			const VkDeviceSize bufferSize = (VkDeviceSize)VulkanRenderer::OCCLUSION_QUERY_POOL_SIZE * sizeof(uint64);
 			VkMappedMemoryRange invalidateRange{};
 			invalidateRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 			invalidateRange.memory = m_rendererVk->m_occlusionQueries.memoryQueryResults;
