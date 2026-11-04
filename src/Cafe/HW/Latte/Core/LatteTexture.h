@@ -336,7 +336,7 @@ struct LatteTextureLoadDiagnostics
 {
 	uint64 sliceLoadAttempts{};
 	uint64 decoderUnavailable{};
-	uint64 zeroDecodedSize{};
+	uint64 invalidDecodedSize{};
 	uint64 decodeCalls{};
 	uint64 decodedBytes{};
 	uint64 uploadBufferBytesRequested{};
