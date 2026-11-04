@@ -20,6 +20,9 @@ uint8* LatteTextureReadbackInfoVk::GetData()
 	if ((uint64)m_buffer_offset + m_transferSize > m_bufferSize)
 		throw std::runtime_error("Vulkan texture readback range exceeds the mapped buffer");
 
+	if (m_memoryIsCoherent)
+		return m_buffer_ptr + m_buffer_offset;
+
 	const auto renderer = VulkanRenderer::GetInstance();
 	const VkDeviceSize atomSize = renderer->GetNonCoherentAtomSize() ? renderer->GetNonCoherentAtomSize() : 1;
 	const VkDeviceSize alignedOffset = ((VkDeviceSize)m_buffer_offset / atomSize) * atomSize;
