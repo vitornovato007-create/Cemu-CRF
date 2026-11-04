@@ -921,8 +921,40 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 	int width, height;
 	baseImageTex->GetEffectiveSize(width, height, 0);
 
-	VkImage image = nullptr;
-	VkDeviceMemory imageMemory = nullptr;;
+	VkImage image = VK_NULL_HANDLE;
+	VkDeviceMemory imageMemory = VK_NULL_HANDLE;
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkDeviceMemory bufferMemory = VK_NULL_HANDLE;
+	void* bufferPtr = nullptr;
+
+	auto cleanupScreenshotResources = [&]()
+	{
+		if (bufferPtr != nullptr && bufferMemory != VK_NULL_HANDLE)
+		{
+			vkUnmapMemory(m_logicalDevice, bufferMemory);
+			bufferPtr = nullptr;
+		}
+		if (buffer != VK_NULL_HANDLE)
+		{
+			vkDestroyBuffer(m_logicalDevice, buffer, nullptr);
+			buffer = VK_NULL_HANDLE;
+		}
+		if (bufferMemory != VK_NULL_HANDLE)
+		{
+			vkFreeMemory(m_logicalDevice, bufferMemory, nullptr);
+			bufferMemory = VK_NULL_HANDLE;
+		}
+		if (image != VK_NULL_HANDLE)
+		{
+			vkDestroyImage(m_logicalDevice, image, nullptr);
+			image = VK_NULL_HANDLE;
+		}
+		if (imageMemory != VK_NULL_HANDLE)
+		{
+			vkFreeMemory(m_logicalDevice, imageMemory, nullptr);
+			imageMemory = VK_NULL_HANDLE;
+		}
+	};
 
 	auto format = baseImageTex->GetFormat();
 	if (format != VK_FORMAT_R8G8B8A8_UNORM && format != VK_FORMAT_R8G8B8A8_SRGB && format != VK_FORMAT_R8G8B8_UNORM && format != VK_FORMAT_R8G8B8_SNORM)
@@ -953,8 +985,13 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 			imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-			if (vkCreateImage(m_logicalDevice, &imageInfo, nullptr, &image) != VK_SUCCESS)
+			const VkResult createImageResult = vkCreateImage(m_logicalDevice, &imageInfo, nullptr, &image);
+			if (createImageResult != VK_SUCCESS)
+			{
+				cemuLog_log(LogType::Force, "Screenshot: vkCreateImage failed: VkResult={}, format={}, extent={}x{}", (sint32)createImageResult, (sint32)blitFormat, width, height);
+				cleanupScreenshotResources();
 				return;
+			}
 
 			VkMemoryRequirements memRequirements;
 			vkGetImageMemoryRequirements(m_logicalDevice, image, &memRequirements);
@@ -964,20 +1001,29 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 			allocInfo.allocationSize = memRequirements.size;
 			uint32 memIndex;
 			bool foundMemory = memoryManager->FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, memIndex);
-			if(!foundMemory)
+			if (!foundMemory)
 			{
-				cemuLog_log(LogType::Force, "Screenshot request failed due to incompatible vulkan memory types.");
+				cemuLog_log(LogType::Force, "Screenshot: no compatible Vulkan memory type (bits={:#x}, size={})", memRequirements.memoryTypeBits, memRequirements.size);
+				cleanupScreenshotResources();
 				return;
 			}
 			allocInfo.memoryTypeIndex = memIndex;
 
-			if (vkAllocateMemory(m_logicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS)
+			const VkResult imageAllocResult = vkAllocateMemory(m_logicalDevice, &allocInfo, nullptr, &imageMemory);
+			if (imageAllocResult != VK_SUCCESS)
 			{
-				vkDestroyImage(m_logicalDevice, image, nullptr);
+				cemuLog_log(LogType::Force, "Screenshot: vkAllocateMemory failed: VkResult={}, bytes={}, memoryType={}", (sint32)imageAllocResult, memRequirements.size, memIndex);
+				cleanupScreenshotResources();
 				return;
 			}
 
-			vkBindImageMemory(m_logicalDevice, image, imageMemory, 0);
+			const VkResult imageBindResult = vkBindImageMemory(m_logicalDevice, image, imageMemory, 0);
+			if (imageBindResult != VK_SUCCESS)
+			{
+				cemuLog_log(LogType::Force, "Screenshot: vkBindImageMemory failed: VkResult={}, format={}, extent={}x{}, bytes={}", (sint32)imageBindResult, (sint32)blitFormat, width, height, memRequirements.size);
+				cleanupScreenshotResources();
+				return;
+			}
 
 			// prepare dest image
 			{
@@ -1104,12 +1150,19 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 	region.imageOffset = { 0,0,0 };
 	region.imageExtent = { (uint32)width,(uint32)height,1 };
 
-	void* bufferPtr = nullptr;
-
-	VkBuffer buffer = nullptr;
-	VkDeviceMemory bufferMemory = nullptr;
-	memoryManager->CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, buffer, bufferMemory);
-	vkMapMemory(m_logicalDevice, bufferMemory, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
+	if (!memoryManager->CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT, buffer, bufferMemory))
+	{
+		cemuLog_log(LogType::Force, "Screenshot: failed to create readback buffer ({} bytes)", size);
+		cleanupScreenshotResources();
+		return;
+	}
+	const VkResult mapResult = vkMapMemory(m_logicalDevice, bufferMemory, 0, VK_WHOLE_SIZE, 0, &bufferPtr);
+	if (mapResult != VK_SUCCESS || bufferPtr == nullptr)
+	{
+		cemuLog_log(LogType::Force, "Screenshot: vkMapMemory failed: VkResult={}, bytes={}", (sint32)mapResult, size);
+		cleanupScreenshotResources();
+		return;
+	}
 
 	{
 		VkImageMemoryBarrier barrier = {};
@@ -1137,7 +1190,7 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 	bool formatValid = true;
 
 	std::vector<uint8> rgb_data;
-	rgb_data.reserve(3 * width * height);
+	rgb_data.resize(3 * width * height);
 
 	switch (format)
 	{
@@ -1168,14 +1221,7 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 		cemu_assert_debug(false);
 	}
 
-	vkUnmapMemory(m_logicalDevice, bufferMemory);
-	vkFreeMemory(m_logicalDevice, bufferMemory, nullptr);
-	vkDestroyBuffer(m_logicalDevice, buffer, nullptr);
-
-	if (image)
-		vkDestroyImage(m_logicalDevice, image, nullptr);
-	if (imageMemory)
-		vkFreeMemory(m_logicalDevice, imageMemory, nullptr);
+	cleanupScreenshotResources();
 
 	if (formatValid)
 		SaveScreenshot(rgb_data, width, height, !padView);
