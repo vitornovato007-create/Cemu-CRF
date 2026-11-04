@@ -538,12 +538,12 @@ namespace NativeEmulation
             report.append("not requested\n");
         else
             report.append(validation.validationLayerEnabled ? "loaded\n" : "not loaded\n");
-        report.append(fmt::format("VK_EXT_debug_utils available: {}\\n", validation.debugUtilsAvailable ? "yes" : "no"));
-        report.append(fmt::format("Vulkan debug messenger created: {}\\n", validation.debugMessengerCreated ? "yes" : "no"));
+        report.append(fmt::format("VK_EXT_debug_utils available: {}\n", validation.debugUtilsAvailable ? "yes" : "no"));
+        report.append(fmt::format("Vulkan debug messenger created: {}\n", validation.debugMessengerCreated ? "yes" : "no"));
         if (validation.validationRequested)
-            report.append(fmt::format("Debug messenger VkResult: {}\\n\\n", validation.debugMessengerResult));
+            report.append(fmt::format("Debug messenger VkResult: {}\n\n", validation.debugMessengerResult));
         else
-            report.append("\\n");
+            report.append("\n");
         AppendTextureCacheSnapshot(report);
         report.append(s_androidLogCapture.Snapshot());
         if (report.empty() || report.back() != '\n')
