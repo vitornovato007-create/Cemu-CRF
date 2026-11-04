@@ -342,7 +342,7 @@ VulkanRenderer::VulkanRenderer()
 	VkResult err;
 
 	// Instance creation does not request or load Vulkan validation layers.
-	std::vector<const char*> enabledInstanceExtensions = CheckInstanceExtensionSupport(m_featureControl);
+	std::vector<const char*> enabledInstanceExtensions = CheckInstanceExtensionSupport();
 
 	uint32 apiVersion = VK_API_VERSION_1_1;
 	if (vkEnumerateInstanceVersion(&apiVersion) != VK_SUCCESS)
@@ -1365,7 +1365,7 @@ bool VulkanRenderer::CheckDeviceExtensionSupport(const VkPhysicalDevice device, 
 	return requiredExtensions.empty();
 }
 
-std::vector<const char*> VulkanRenderer::CheckInstanceExtensionSupport(FeatureControl& info)
+std::vector<const char*> VulkanRenderer::CheckInstanceExtensionSupport()
 {
 	std::vector<VkExtensionProperties> availableInstanceExtensions;
 	std::vector<const char*> enabledInstanceExtensions;
