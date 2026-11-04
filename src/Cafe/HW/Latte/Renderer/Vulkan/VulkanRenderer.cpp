@@ -28,6 +28,7 @@
 #include "Cafe/HW/Latte/Core/LatteTiming.h" // vsync control
 
 #include <glslang/Public/ShaderLang.h>
+#include <limits>
 
 #ifndef VK_API_VERSION_MAJOR
 #define VK_API_VERSION_MAJOR(version) (((uint32_t)(version) >> 22) & 0x7FU)
