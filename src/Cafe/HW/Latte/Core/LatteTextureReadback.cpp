@@ -26,6 +26,11 @@ void LatteTextureReadback_StartTransfer(LatteTextureView* textureView)
 	HRTick currentTick = HighResolutionTimer().now().getTick();
 	// create info entry and store in ordered linked list
 	LatteTextureReadbackInfo* readbackInfo = g_renderer->texture_createReadback(textureView);
+	if (!readbackInfo)
+	{
+		cemuLog_log(LogType::Force, "Texture readback skipped: renderer could not reserve a valid readback buffer");
+		return;
+	}
 	sTextureActiveReadbackQueue.push(readbackInfo);
 	readbackInfo->StartTransfer();
 	readbackInfo->transferStartTime = currentTick;
