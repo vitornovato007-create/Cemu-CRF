@@ -491,7 +491,7 @@ size_t VKRMemoryManager::GetTotalMemoryForBufferType(VkBufferUsageFlags usage, V
 bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
 	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
-	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return recordFailure(); };
+	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return false; };
 	buffer = VK_NULL_HANDLE;
 	bufferMemory = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo{};
@@ -538,7 +538,7 @@ bool VKRMemoryManager::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 bool VKRMemoryManager::CreateBufferFromHostMemory(void* hostPointer, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) const
 {
 	s_vkBufferCreateAttempts.fetch_add(1, std::memory_order_relaxed);
-	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return recordFailure(); };
+	auto recordFailure = []() { s_vkBufferCreateFailures.fetch_add(1, std::memory_order_relaxed); return false; };
 	buffer = VK_NULL_HANDLE;
 	bufferMemory = VK_NULL_HANDLE;
 	VkBufferCreateInfo bufferInfo{};
