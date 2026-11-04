@@ -619,7 +619,16 @@ VkImageMemAllocation* VKRMemoryManager::imageMemoryAllocate(VkImage image)
 		}
 	}
 
-	vkBindImageMemory(m_vkr->GetLogicalDevice(), image, texHeap->getChunkMem(mem.chunkIndex), mem.offset);
+	VkResult bindResult = vkBindImageMemory(m_vkr->GetLogicalDevice(), image, texHeap->getChunkMem(mem.chunkIndex), mem.offset);
+	if (bindResult != VK_SUCCESS)
+	{
+		texHeap->freeMem(mem);
+		cemuLog_log(LogType::Force,
+			"Vulkan: vkBindImageMemory failed (VkResult {}, image {}, allocation {} bytes, memory type bits {:#x})",
+			(sint32)bindResult, (void*)image, allocationSize, typeFilter);
+		m_vkr->UnrecoverableError("Failed to bind Vulkan image memory");
+		return nullptr;
+	}
 
 	return new VkImageMemAllocation(typeFilter, mem, allocationSize);
 }
