@@ -19,7 +19,7 @@ enum class LogType : sint32
 	H264 = 9,
 	OpenGLLogging = 10, // OpenGL debug logging
 	TextureCache = 11, // texture cache warnings and info
-	VulkanValidation = 12, // Vulkan validation layer
+	Monitor = 12, // Cemu Android Monitor 2.0
 	Patches = 14,
 	CoreinitMem = 8, // coreinit memory functions
 	CoreinitMP = 15,
