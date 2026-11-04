@@ -1600,13 +1600,13 @@ void VulkanRenderer::CreateCommandBuffers()
 	auto it = m_cmd_buffer_fences.begin();
 	VkFenceCreateInfo fenceInfo{};
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	vkCreateFence(m_logicalDevice, &fenceInfo, nullptr, &*it);
+	CheckVulkanResultForDiagnostics(vkCreateFence(m_logicalDevice, &fenceInfo, nullptr, &*it), "vkCreateFence");
 
 	++it;
 	fenceInfo.flags = 0;
 	for (; it != m_cmd_buffer_fences.end(); ++it)
 	{
-		vkCreateFence(m_logicalDevice, &fenceInfo, nullptr, &*it);
+		CheckVulkanResultForDiagnostics(vkCreateFence(m_logicalDevice, &fenceInfo, nullptr, &*it), "vkCreateFence");
 	}
 
 	VkCommandBufferAllocateInfo allocInfo = {};
@@ -1707,7 +1707,7 @@ void VulkanRenderer::CreateNullTexture(NullTexture& nullTex, VkImageType imageTy
 	samplerInfo.maxAnisotropy = 1.0;
 	samplerInfo.anisotropyEnable = VK_FALSE;
 	samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-	vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &nullTex.sampler);
+	CheckVulkanResultForDiagnostics(vkCreateSampler(m_logicalDevice, &samplerInfo, nullptr, &nullTex.sampler), "vkCreateSampler(null texture)");
 }
 
 void VulkanRenderer::CreateNullObjects()
