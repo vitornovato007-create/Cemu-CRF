@@ -247,22 +247,20 @@ void LatteIndices_invalidateAll();
 
 struct VulkanMemoryDiagnostics
 {
-	uint64 textureHeapBytes{};
-	uint64 textureAllocatedBytes{};
-	uint64 textureHeapCount{};
-	uint64 stagingBufferBytes{};
-	uint64 stagingBufferFreeBytes{};
-	uint64 indexBufferBytes{};
-	uint64 indexBufferFreeBytes{};
-	uint64 strideBufferBytes{};
-	uint64 strideBufferFreeBytes{};
+	// Atomic process-lifetime/current-allocation metrics; safe to snapshot off the render thread.
+	uint64 textureHeapReservedBytes{};
+	uint64 textureHeapChunks{};
+	uint64 textureBytesCurrentlyAllocated{};
+	uint64 textureAllocationsCurrentlyLive{};
+	uint64 bufferBytesRequested{};
+	uint64 bufferBytesAllocatedCumulative{};
 	uint64 bufferCreateAttempts{};
 	uint64 bufferCreateSuccesses{};
 	uint64 bufferCreateFailures{};
 	uint64 imageAllocationAttempts{};
 	uint64 imageAllocationSuccesses{};
 	uint64 imageAllocationFailures{};
-	uint64 imageAllocationBytes{};
+	uint64 imageAllocationBytesCumulative{};
 };
 
 class VKRMemoryManager
