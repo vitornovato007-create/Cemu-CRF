@@ -1133,7 +1133,9 @@ void VulkanRenderer::HandleScreenshotRequest(LatteTextureView* texView, bool pad
 
 	if (size == 0)
 	{
+		cemuLog_log(LogType::Force, "Screenshot: unsupported readback format {} ({}x{})", (sint32)format, width, height);
 		cemu_assert_debug(false);
+		cleanupScreenshotResources();
 		return;
 	}
 
