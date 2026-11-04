@@ -38,6 +38,11 @@ void LatteSurfaceCopy_copySurfaceNew(MPTR srcPhysAddr, MPTR srcMipAddr, uint32 s
 	{
 		LatteTexture* renderTargetConf = nullptr;
 		destinationView = LatteTexture_CreateMapping(dstPhysAddr, dstMipAddr, dstWidth, dstHeight, dstDepth, dstPitch, dstTilemode, dstSwizzle, dstLevel, 1, dstSlice, 1, dstSurfaceFormat, dstDim, Latte::IsMSAA(dstDim) ? Latte::E_DIM::DIM_2D_MSAA : Latte::E_DIM::DIM_2D, false);
+		if (destinationView == nullptr || destinationView->baseTexture == nullptr)
+		{
+			cemuLog_log(LogType::Force, "HLECopySurface(): Failed to create destination texture mapping (address=0x{:08x}, size={}x{}, format=0x{:04x}, tileMode={})", dstPhysAddr, dstWidth, dstHeight, (uint32)dstSurfaceFormat, (uint32)dstTilemode);
+			return;
+		}
 		destinationTexture = destinationView->baseTexture;
 	}
 	// copy texture
@@ -79,7 +84,7 @@ void LatteSurfaceCopy_copySurfaceNew(MPTR srcPhysAddr, MPTR srcMipAddr, uint32 s
 		debug_printf("Source or destination texture does not exist\n");
 
 	// download destination texture if it matches known accessed formats
-	if (destinationTexture->width == 8 && destinationTexture->height == 8 && destinationTexture->tileMode == Latte::E_HWTILEMODE::TM_1D_TILED_THIN1)
+	if (destinationTexture && destinationTexture->width == 8 && destinationTexture->height == 8 && destinationTexture->tileMode == Latte::E_HWTILEMODE::TM_1D_TILED_THIN1)
 	{
 		cemuLog_logDebug(LogType::Force, "Texture readback after copy for Bayonetta 2 (phys: 0x{:08x})", destinationTexture->physAddress);
 		LatteTextureReadback_Initate(destinationView);
