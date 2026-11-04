@@ -6,6 +6,7 @@
 #include "Cafe/HW/Latte/Core/LattePerformanceMonitor.h"
 #include <array>
 #include <atomic>
+#include <chrono>
 
 namespace
 {
@@ -1139,6 +1140,7 @@ bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool show
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	VkResult result;
 	uint8 retryCount = 0;
+	const auto pipelineCreateBegin = std::chrono::steady_clock::now();
 	while (retryCount < 3)
 	{
 		std::shared_lock lock(vkRenderer->m_pipeline_cache_save_mutex);
@@ -1149,6 +1151,17 @@ bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool show
 			break;
 		s_vkPipelineOutOfMemoryRetries.fetch_add(1, std::memory_order_relaxed);
 		retryCount++;
+	}
+	const auto pipelineCreateDurationMs = std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now() - pipelineCreateBegin).count() / 1000.0;
+	if (pipelineCreateDurationMs >= 1.0)
+	{
+		cemuLog_log(LogType::Force,
+			"[Monitor 2.0] PipelineCreate durationMs={:.3f} result={} sync={} renderThread={} retries={} VS={:016x} PS={:016x} GS={:016x}",
+			pipelineCreateDurationMs, (sint32)result, forceCompile, isRenderThread, retryCount,
+			m_vkVertexShader ? m_vkVertexShader->GetBaseHash() : 0,
+			m_vkPixelShader ? m_vkPixelShader->GetBaseHash() : 0,
+			m_vkGeometryShader ? m_vkGeometryShader->GetBaseHash() : 0);
 	}
 
 	if (result == VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT)
