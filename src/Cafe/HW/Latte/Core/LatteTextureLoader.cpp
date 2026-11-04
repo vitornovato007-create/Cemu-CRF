@@ -121,7 +121,17 @@ void LatteTextureLoader_begin(LatteTextureLoaderCtx* textureLoader, uint32 slice
 	textureLoader->tileMode = surfaceInfo.hwTileMode;
 
 	textureLoader->minOffsetOutdated = 0;
-	textureLoader->maxOffsetOutdated = (sint32)surfaceInfo.surfSize;
+	if (surfaceInfo.surfSize > std::numeric_limits<uint32>::max() ||
+		(uint64)physImagePtr + surfaceInfo.surfSize > std::numeric_limits<uint32>::max())
+	{
+		cemuLog_log(LogType::Force,
+			"Texture surface range exceeds guest address limits: imageAddress=0x{:08x}, surfaceBytes={}",
+			physImagePtr, surfaceInfo.surfSize);
+		textureLoader->inputData = nullptr;
+		textureLoader->maxOffsetOutdated = 0;
+		return;
+	}
+	textureLoader->maxOffsetOutdated = (uint32)surfaceInfo.surfSize;
 
 	textureLoader->surfaceInfoHeight = surfaceInfo.height;
 	textureLoader->surfaceInfoDepth = surfaceInfo.depth;
