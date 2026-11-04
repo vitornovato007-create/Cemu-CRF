@@ -7,6 +7,16 @@
 #include "util/helpers/Semaphore.h"
 #include "util/helpers/fspinlock.h"
 
+struct VulkanShaderDiagnostics
+{
+	uint64 moduleCreateAttempts{};
+	uint64 moduleCreateSuccesses{};
+	uint64 moduleCreateFailures{};
+	uint64 moduleCreateBytes{};
+};
+
+VulkanShaderDiagnostics VulkanShader_GetDiagnostics();
+
 class RendererShaderVk : public RendererShader
 {
 	friend class VulkanRenderer;
