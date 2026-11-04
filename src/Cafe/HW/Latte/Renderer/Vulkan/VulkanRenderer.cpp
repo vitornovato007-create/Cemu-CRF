@@ -29,6 +29,7 @@
 
 #include <glslang/Public/ShaderLang.h>
 #include <limits>
+#include <chrono>
 
 #ifndef VK_API_VERSION_MAJOR
 #define VK_API_VERSION_MAJOR(version) (((uint32_t)(version) >> 22) & 0x7FU)
@@ -2174,7 +2175,16 @@ void VulkanRenderer::SubmitCommandBuffer(VkSemaphore signalSemaphore, VkSemaphor
 	submitInfo.pWaitDstStageMask = semWaitStageMask;
 	submitInfo.pWaitSemaphores = waitSemArray;
 
+	const auto queueSubmitBegin = std::chrono::steady_clock::now();
 	const VkResult result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_cmd_buffer_fences[m_commandBufferIndex]);
+	const auto queueSubmitDurationMs = std::chrono::duration_cast<std::chrono::microseconds>(
+		std::chrono::steady_clock::now() - queueSubmitBegin).count() / 1000.0;
+	if (queueSubmitDurationMs >= 2.0 || result != VK_SUCCESS)
+	{
+		cemuLog_log(LogType::Force,
+			"[Monitor 2.0] QueueSubmit durationMs={:.3f} result={} cmdBuffer={} drawcalls={} waitSemaphores={}",
+			queueSubmitDurationMs, (sint32)result, m_commandBufferIndex, m_recordedDrawcalls, submitInfo.waitSemaphoreCount);
+	}
 	if (result != VK_SUCCESS)
 		UnrecoverableError(fmt::format("failed to submit command buffer. Error {}", result).c_str());
 	m_numSubmittedCmdBuffers++;
