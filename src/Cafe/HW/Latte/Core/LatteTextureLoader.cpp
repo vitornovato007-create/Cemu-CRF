@@ -722,9 +722,17 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	textureLoader.dump = ActiveSettings::DumpTexturesEnabled();
 	if (textureLoader.dump)
 	{
-		uint32 dumpSize = (((textureLoader.width + 4)&~4) * ((textureLoader.height + 4)&~4)) * 4;
+		const size_t dumpWidth = (size_t)((textureLoader.width + 4) & ~4);
+		const size_t dumpHeight = (size_t)((textureLoader.height + 4) & ~4);
+		const size_t dumpSize = dumpWidth * dumpHeight * 4;
 		textureLoader.dumpRGBA = (uint8*)malloc(dumpSize);
-		memset(textureLoader.dumpRGBA, 0x00, dumpSize);
+		if (textureLoader.dumpRGBA == nullptr)
+		{
+			textureLoader.dump = false;
+			cemuLog_log(LogType::Force, "Texture dump buffer allocation failed: resolution={}x{}, requestedBytes={}", textureLoader.width, textureLoader.height, dumpSize);
+		}
+		else
+			memset(textureLoader.dumpRGBA, 0x00, dumpSize);
 	}
 
 	// query texture decoder from renderer
