@@ -1130,6 +1130,11 @@ void LatteDecompiler_DecompileGeometryShader(uint64 shaderBaseHash, uint32* cont
 	else
 	{
 		shaderContext.parsedGSCopyShader = LatteGSCopyShaderParser_parse(gsCopyProgramData, gsCopyProgramSize);
+		if (shaderContext.parsedGSCopyShader == nullptr)
+		{
+			cemuLog_log(LogType::Force, "Geometry shader decompilation aborted: copy-shader program is malformed (baseHash={:016x}, programBytes={})", shaderBaseHash, gsCopyProgramSize);
+			shader->hasError = true;
+		}
 	}
 	for (sint32 i = 0; i < LATTE_NUM_MAX_TEX_UNITS; i++)
 	{
