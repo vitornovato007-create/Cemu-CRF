@@ -452,6 +452,7 @@ namespace NativeEmulation
         report.append("Texture decode/upload counters (process lifetime):\n");
         report.append(fmt::format("  Texture slice load attempts: {}\n", loadStats.sliceLoadAttempts));
         report.append(fmt::format("  Decoder unavailable: {}\n", loadStats.decoderUnavailable));
+        report.append(fmt::format("  Decoder returned zero output size: {}\n", loadStats.zeroDecodedSize));
         report.append(fmt::format("  Decoder calls completed: {}\n", loadStats.decodeCalls));
         report.append(fmt::format("  Decoded output bytes: {}\n", loadStats.decodedBytes));
         report.append(fmt::format("  Upload-buffer bytes requested: {}\n", loadStats.uploadBufferBytesRequested));
@@ -471,8 +472,19 @@ namespace NativeEmulation
         {
             for (const auto& event : recentTextureEvents)
             {
-                const char* eventName = event.type == LatteTextureDiagnosticEventType::DecoderUnavailable
-                    ? "decoder unavailable" : "upload buffer allocation failed";
+                const char* eventName = "unknown texture diagnostic";
+                switch (event.type)
+                {
+                case LatteTextureDiagnosticEventType::DecoderUnavailable:
+                    eventName = "decoder unavailable";
+                    break;
+                case LatteTextureDiagnosticEventType::UploadBufferAllocationFailed:
+                    eventName = "upload buffer allocation failed";
+                    break;
+                case LatteTextureDiagnosticEventType::InvalidDecodedSize:
+                    eventName = "decoder returned zero output size";
+                    break;
+                }
                 report.append(fmt::format("  {}: GX2=0x{:04x}, {}x{}, slice={}, mip={}, depth={}, bytes={}\n",
                     eventName, event.format, event.width, event.height, event.slice, event.mip, event.isDepth ? "yes" : "no", event.bytes));
             }
