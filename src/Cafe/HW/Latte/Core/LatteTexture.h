@@ -323,6 +323,16 @@ struct LatteTextureInformation
 	std::vector<LatteTextureViewInformation> views;
 };
 
+struct LatteTextureLifecycleDiagnostics
+{
+	uint64 constructedTotal{};
+	uint64 destroyedTotal{};
+	uint64 currentlyAlive{};
+};
+
+// Atomic lifetime counters; safe to read from the Android diagnostics thread.
+LatteTextureLifecycleDiagnostics LatteTexture_GetLifecycleDiagnostics();
+
 void LatteTexture_init();
 void LatteTexture_updateTextures();
 
