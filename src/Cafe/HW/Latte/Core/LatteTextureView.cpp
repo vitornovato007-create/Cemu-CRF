@@ -188,7 +188,7 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSlice(MPTR physAddr, sint32
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket[key].list)
 	{
-		if (it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		if (!it.isDepth && it.width == width && it.height == height && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
 				return it.view;
@@ -204,7 +204,7 @@ LatteTextureView* LatteTextureViewLookupCache::lookupSliceMinSize(MPTR physAddr,
 	key %= TEXTURE_VIEW_BUCKETS;
 	for (auto& it : texViewBucket_nores[key].list)
 	{
-		if (it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
+		if (!it.isDepth && it.width >= minWidth && it.height >= minHeight && it.pitch == pitch && it.physAddr == physAddr && it.format == format)
 		{
 			if (firstSlice == it.firstSlice && firstMip == it.firstMip)
 				return it.view;
