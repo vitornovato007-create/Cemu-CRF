@@ -208,9 +208,9 @@ void LatteTexture_updateTexturesForStage(LatteDecompilerShader* shaderContext, u
 		// look for already existing texture
 		LatteTextureView* textureView;
 		if (!isDepthSampler)
-			textureView = LatteTextureViewLookupCache::lookup(physAddr, width, height, depth, pitch, viewFirstMip, viewNumMips, viewFirstSlice, viewNumSlices, format, dim);
+			textureView = LatteTextureViewLookupCache::lookup(physAddr, width, height, depth, pitch, viewFirstMip, viewNumMips, viewFirstSlice, viewNumSlices, format, dim, tileMode);
 		else
-			textureView = LatteTextureViewLookupCache::lookupWithColorOrDepthType(physAddr, width, height, depth, pitch, viewFirstMip, viewNumMips, viewFirstSlice, viewNumSlices, format, dim, true);
+			textureView = LatteTextureViewLookupCache::lookupWithColorOrDepthType(physAddr, width, height, depth, pitch, viewFirstMip, viewNumMips, viewFirstSlice, viewNumSlices, format, dim, true, tileMode);
 		if (!textureView)
 		{
 			// view not found, create a new mapping which will also create a new texture if necessary
