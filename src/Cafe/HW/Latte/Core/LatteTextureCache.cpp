@@ -35,7 +35,7 @@ uint32 _quickStochasticHash(void* texData, uint32 memRange)
 	const uint32 lastSample = memRange - 1;
 	for (uint32 i = 0; i < sampleCount; ++i)
 	{
-		const uint32 sampleIndex = sampleCount == 1 ? 0 : (i * lastSample) / (sampleCount - 1);
+		const uint32 sampleIndex = sampleCount == 1 ? 0 : static_cast<uint32>((static_cast<uint64>(i) * lastSample) / (sampleCount - 1));
 		hashVal += texDataU64[sampleIndex];
 		hashVal = (hashVal << 3) | (hashVal >> 61);
 	}
