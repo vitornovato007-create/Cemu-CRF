@@ -11,6 +11,7 @@ namespace
 {
 	std::atomic<uint64> s_textureSliceLoadAttempts{ 0 };
 	std::atomic<uint64> s_textureDecoderUnavailable{ 0 };
+	std::atomic<uint64> s_textureInvalidInputAddress{ 0 };
 	std::atomic<uint64> s_textureInvalidDecodedSize{ 0 };
 	std::atomic<uint64> s_textureDecodeCalls{ 0 };
 	std::atomic<uint64> s_textureDecodedBytes{ 0 };
@@ -25,6 +26,7 @@ LatteTextureLoadDiagnostics LatteTextureLoader_GetDiagnostics()
 	LatteTextureLoadDiagnostics result;
 	result.sliceLoadAttempts = s_textureSliceLoadAttempts.load(std::memory_order_relaxed);
 	result.decoderUnavailable = s_textureDecoderUnavailable.load(std::memory_order_relaxed);
+	result.invalidInputAddress = s_textureInvalidInputAddress.load(std::memory_order_relaxed);
 	result.invalidDecodedSize = s_textureInvalidDecodedSize.load(std::memory_order_relaxed);
 	result.decodeCalls = s_textureDecodeCalls.load(std::memory_order_relaxed);
 	result.decodedBytes = s_textureDecodedBytes.load(std::memory_order_relaxed);
@@ -717,6 +719,13 @@ void LatteTextureLoader_UpdateTextureSliceData(LatteTexture* tex, uint32 sliceIn
 	
 	Latte::E_GX2SURFFMT format = tex->format;
 	LatteTextureLoader_begin(&textureLoader, sliceIndex, mipIndex, physImagePtr, physMipPtr, format, dim, width, height, depth, mipLevels, pitch, tileMode, swizzle);
+	if (textureLoader.inputData == nullptr)
+	{
+		s_textureInvalidInputAddress.fetch_add(1, std::memory_order_relaxed);
+		RecordTextureDiagnosticEvent(LatteTextureDiagnosticEventType::InvalidInputAddress, format, width, height, sliceIndex, mipIndex, 0, tex->isDepth);
+		cemuLog_log(LogType::Force, "Texture guest-memory input address is invalid: GX2Format=0x{:04x}, imageAddress=0x{:08x}, mipAddress=0x{:08x}, resolution={}x{}, slice={}, mip={}, dim={}, tileMode={}, depth={}", (uint32)format, physImagePtr, physMipPtr, width, height, sliceIndex, mipIndex, (uint32)dim, (uint32)tileMode, tex->isDepth);
+		return;
+	}
 
 	// enable texture dumping
 	textureLoader.dump = ActiveSettings::DumpTexturesEnabled();
