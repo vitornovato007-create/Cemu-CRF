@@ -3786,7 +3786,19 @@ LatteTextureReadbackInfo* VulkanRenderer::texture_createReadback(LatteTextureVie
 	auto* result = new LatteTextureReadbackInfoVk(m_logicalDevice, textureView);
 	m_textureReadbackBufferWriteIndex = (m_textureReadbackBufferWriteIndex + uploadAlignment - 1) & ~(uploadAlignment - 1);
 	if ((uint64)m_textureReadbackBufferWriteIndex + uploadSize + uploadAlignment > TEXTURE_READBACK_SIZE)
+	{
+		// Instrument ring wraps. This is not a lifetime guarantee; it helps
+		// determine whether the 32 MiB ring wraps while readbacks are active.
+		static std::atomic<uint32> s_readbackRingWrapWarnings{ 0 };
+		const uint32 wrapIndex = s_readbackRingWrapWarnings.fetch_add(1, std::memory_order_relaxed);
+		if (wrapIndex < 16)
+		{
+			cemuLog_log(LogType::Force,
+				"[ReadbackRing] 32 MiB buffer wrap #{}: previousOffset={}, nextTransferBytes={}, alignment={}",
+				wrapIndex + 1, m_textureReadbackBufferWriteIndex, uploadSize, uploadAlignment);
+		}
 		m_textureReadbackBufferWriteIndex = 0;
+	}
 	const uint32 uploadBufferOffset = m_textureReadbackBufferWriteIndex;
 	m_textureReadbackBufferWriteIndex += uploadSize;
 	result->SetBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory, m_textureReadbackBufferPtr,
