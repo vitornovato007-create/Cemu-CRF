@@ -35,6 +35,8 @@ public:
 	void SetUniform2fv(sint32 location, void* data, sint32 count) override;
 	void SetUniform4iv(sint32 location, void* data, sint32 count) override;
 	VkShaderModule& GetShaderModule() { return m_shader_module; }
+	uint64 GetBaseHash() const { return m_baseHash; }
+	uint64 GetAuxHash() const { return m_auxHash; }
 
 	static inline FSpinlock s_dependencyLock;
 
