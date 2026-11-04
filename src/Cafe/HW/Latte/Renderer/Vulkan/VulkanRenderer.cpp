@@ -3886,11 +3886,15 @@ LatteTextureReadbackInfo* VulkanRenderer::texture_createReadback(LatteTextureVie
 	vkGetImageMemoryRequirements(m_logicalDevice, vkTex->GetImageObj()->m_image, &memRequirements);
 
 	const uint32 linearImageSize = result->GetImageSize();
-	const uint32 uploadSize = (linearImageSize == 0) ? memRequirements.size : linearImageSize;
-	const uint32 uploadAlignment = 256; // todo - use Vk optimalBufferCopyOffsetAlignment
+	if (memRequirements.size > std::numeric_limits<uint32>::max())
+		throw std::runtime_error(fmt::format("Texture readback allocation exceeds 32-bit buffer limits: bytes={}", memRequirements.size));
+	const uint32 uploadSize = (linearImageSize == 0) ? (uint32)memRequirements.size : linearImageSize;
+	const uint32 uploadAlignment = std::max<uint32>(256, GetNonCoherentAtomSize());
+	if (uploadSize == 0 || uploadSize > TEXTURE_READBACK_SIZE - uploadAlignment)
+		throw std::runtime_error(fmt::format("Texture readback does not fit the shared buffer: bytes={}, capacity={}", uploadSize, TEXTURE_READBACK_SIZE));
 	m_textureReadbackBufferWriteIndex = (m_textureReadbackBufferWriteIndex + uploadAlignment - 1) & ~(uploadAlignment - 1);
 
-	if ((m_textureReadbackBufferWriteIndex + uploadSize + 256) > TEXTURE_READBACK_SIZE)
+	if ((uint64)m_textureReadbackBufferWriteIndex + uploadSize + uploadAlignment > TEXTURE_READBACK_SIZE)
 	{
 		m_textureReadbackBufferWriteIndex = 0;
 	}
@@ -3898,7 +3902,7 @@ LatteTextureReadbackInfo* VulkanRenderer::texture_createReadback(LatteTextureVie
 	const uint32 uploadBufferOffset = m_textureReadbackBufferWriteIndex;
 	m_textureReadbackBufferWriteIndex += uploadSize;
 
-	result->SetBuffer(m_textureReadbackBuffer, m_textureReadbackBufferPtr, uploadBufferOffset);
+	result->SetBuffer(m_textureReadbackBuffer, m_textureReadbackBufferMemory, m_textureReadbackBufferPtr, uploadBufferOffset, uploadSize, TEXTURE_READBACK_SIZE);
 
 	return result;
 }
