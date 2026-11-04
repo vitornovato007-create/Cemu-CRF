@@ -347,6 +347,27 @@ struct LatteTextureLoadDiagnostics
 // Process-lifetime texture decode/upload counters; independent of Vulkan Validation.
 LatteTextureLoadDiagnostics LatteTextureLoader_GetDiagnostics();
 
+enum class LatteTextureDiagnosticEventType : uint32
+{
+	DecoderUnavailable = 1,
+	UploadBufferAllocationFailed = 2,
+};
+
+struct LatteTextureDiagnosticEvent
+{
+	LatteTextureDiagnosticEventType type{};
+	uint32 format{};
+	uint32 width{};
+	uint32 height{};
+	uint32 slice{};
+	uint32 mip{};
+	uint64 bytes{};
+	bool isDepth{};
+};
+
+// Returns a bounded snapshot of the most recent texture-loading failures.
+std::vector<LatteTextureDiagnosticEvent> LatteTextureLoader_GetRecentDiagnosticEvents(uint64& droppedEvents);
+
 void LatteTexture_init();
 void LatteTexture_updateTextures();
 
