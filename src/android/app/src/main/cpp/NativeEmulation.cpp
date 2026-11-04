@@ -64,6 +64,10 @@ namespace NativeEmulation
         // formats a bounded line and performs a short, non-blocking queue insert.
         void Log(std::string_view filter, std::string_view message) override
         {
+            // The Monitor switch controls log capture. Keep crash reports even
+            // when monitoring is disabled; counters in the exported report remain available.
+            if (!cemuLog_isLoggingEnabled(LogType::Monitor) && filter != "Crash report")
+                return;
             try
             {
                 const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -802,6 +806,8 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setMonitorEnabled([[maybe_un
     else
         flags &= ~monitorFlag;
     cemuLog_setActiveLoggingFlags(flags);
+    if (enabled)
+        cemuLog_log(LogType::Monitor, "Monitor 2.0 capture enabled");
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT jboolean JNICALL
