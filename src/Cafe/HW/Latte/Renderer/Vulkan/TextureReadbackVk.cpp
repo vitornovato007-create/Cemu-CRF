@@ -47,13 +47,12 @@ uint32 LatteTextureReadbackInfoVk::GetImageSize(LatteTextureView* textureView)
 	const auto textureFormat = baseTexture->GetFormat();
 	auto checkedLinearSize = [baseTexture](uint32 bytesPerPixel) -> uint32 {
 		const uint64 pixelCount = (uint64)baseTexture->width * (uint64)baseTexture->height;
-		const uint64 byteCount = pixelCount * bytesPerPixel;
-		if (pixelCount == 0 || byteCount > std::numeric_limits<uint32>::max())
+		if (pixelCount == 0 || pixelCount > std::numeric_limits<uint32>::max() / bytesPerPixel)
 		{
 			cemuLog_log(LogType::Force, "Texture readback size is invalid or exceeds 32-bit limits: resolution={}x{}, bytesPerPixel={}", baseTexture->width, baseTexture->height, bytesPerPixel);
 			return 0;
 		}
-		return (uint32)byteCount;
+		return (uint32)(pixelCount * bytesPerPixel);
 	};
 	if (textureView->format == Latte::E_GX2SURFFMT::R8_G8_B8_A8_UNORM)
 	{
