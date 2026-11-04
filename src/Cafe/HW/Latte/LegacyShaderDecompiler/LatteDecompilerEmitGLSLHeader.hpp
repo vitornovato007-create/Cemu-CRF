@@ -498,11 +498,25 @@ namespace LatteDecompiler
 				if (((decompilerContext->contextRegisters[mmSQ_GSVS_RING_ITEMSIZE] & 0x7FFF) & 0xF) != 0)
 					debugBreakpoint();
 
+				std::array<bool, 16> emittedG2PParameters{};
 				for (sint32 p = 0; p < decompilerContext->parsedGSCopyShader->numParam; p++)
 				{
-					if (decompilerContext->parsedGSCopyShader->paramMapping[p].exportType != 2)
+					const auto& parameter = decompilerContext->parsedGSCopyShader->paramMapping[p];
+					if (parameter.exportType != 2)
 						continue;
-					src->addFmt("layout(location = {}) out vec4 passG2PParameter{};" _CRLF, decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam & 0x7F, (sint32)decompilerContext->parsedGSCopyShader->paramMapping[p].exportParam);
+					if (parameter.exportParam >= emittedG2PParameters.size())
+					{
+						cemuLog_log(LogType::Force, "Geometry copy shader {:016x} has unsupported pixel-output parameter {}", decompilerContext->shaderBaseHash, (uint32)parameter.exportParam);
+						decompilerContext->shader->hasError = true;
+						continue;
+					}
+					if (emittedG2PParameters[parameter.exportParam])
+					{
+						cemuLog_log(LogType::Force, "Geometry copy shader {:016x} maps multiple GPRs to pixel-output parameter {}; emitting one GLSL declaration", decompilerContext->shaderBaseHash, (uint32)parameter.exportParam);
+						continue;
+					}
+					emittedG2PParameters[parameter.exportParam] = true;
+					src->addFmt("layout(location = {}) out vec4 passG2PParameter{};" _CRLF, parameter.exportParam, (sint32)parameter.exportParam);
 				}
 			}
 			else if (decompilerContext->shaderType == LatteConst::ShaderType::Pixel)
