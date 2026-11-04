@@ -629,6 +629,7 @@ private:
 	VkBuffer m_textureReadbackBuffer = VK_NULL_HANDLE;
 	VkDeviceMemory m_textureReadbackBufferMemory = VK_NULL_HANDLE;
 	uint8* m_textureReadbackBufferPtr = nullptr;
+	bool m_textureReadbackBufferMemoryIsCoherent{ false };
 	uint32 m_textureReadbackBufferWriteIndex = 0;
 
 	// placeholder objects to simulate NULL buffers and textures
@@ -710,6 +711,7 @@ private:
 		// query result buffer
 		VkBuffer bufferQueryResults{ VK_NULL_HANDLE };
 		VkDeviceMemory memoryQueryResults{ VK_NULL_HANDLE };
+		bool queryResultsMemoryIsCoherent{ false };
 		uint64* ptrQueryResults{};
 		std::vector<uint16> list_availableQueryIndices;
 	}m_occlusionQueries;
