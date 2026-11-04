@@ -299,7 +299,7 @@ LatteTextureView* LatteMRT::GetColorAttachmentTexture(uint32 index, bool createN
 
 	cemu_assert_debug(viewNumSlices == 1);
 
-	LatteTextureView* colorBufferView = LatteTextureViewLookupCache::lookupSliceEx(colorBufferPhysMem, colorBufferWidth, colorBufferHeight, colorBufferPitch, viewFirstMip, viewFirstSlice, colorBufferFormat, false);
+	LatteTextureView* colorBufferView = LatteTextureViewLookupCache::lookupSliceEx(colorBufferPhysMem, colorBufferWidth, colorBufferHeight, colorBufferPitch, viewFirstMip, viewFirstSlice, colorBufferFormat, false, colorBufferTileMode);
 
 	if (colorBufferView == nullptr)
 	{
@@ -579,7 +579,7 @@ bool LatteMRT::UpdateCurrentFBO()
 
 			if (depthBufferPhysMem != MPTR_NULL)
 			{
-				LatteTextureView* depthBufferView = LatteTextureViewLookupCache::lookupSliceEx(depthBufferPhysMem, depthBufferWidth, depthBufferHeight, depthBufferPitch, 0, depthBufferViewFirstSlice, depthBufferFormat, true);
+				LatteTextureView* depthBufferView = LatteTextureViewLookupCache::lookupSliceEx(depthBufferPhysMem, depthBufferWidth, depthBufferHeight, depthBufferPitch, 0, depthBufferViewFirstSlice, depthBufferFormat, true, depthBufferTileMode);
 				if (!depthBufferView)
 				{
 					// create new depth buffer view and if it doesn't exist then also create the texture
