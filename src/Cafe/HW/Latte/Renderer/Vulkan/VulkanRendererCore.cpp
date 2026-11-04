@@ -512,7 +512,10 @@ void VulkanRenderer::uniformData_updateUniformVars(uint32 shaderStageIndex, Latt
 			flushedRange.size = uniformSize;
 			const VkResult flushResult = vkFlushMappedMemoryRanges(m_logicalDevice, 1, &flushedRange);
 			if (flushResult != VK_SUCCESS)
+			{
 				cemuLog_log(LogType::Force, "Vulkan uniform ring-buffer flush failed: VkResult={}, stage={}, offset={}, bytes={}, atomSize={}", (sint32)flushResult, shaderStageIndex, uniformOffset, uniformSize, m_featureControl.limits.nonCoherentAtomSize);
+				throw std::runtime_error(fmt::format("Vulkan uniform ring-buffer flush failed: VkResult={}", (sint32)flushResult));
+			}
 		}
 	}
 }
