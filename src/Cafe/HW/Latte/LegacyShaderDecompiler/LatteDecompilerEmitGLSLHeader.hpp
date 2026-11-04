@@ -614,12 +614,6 @@ namespace LatteDecompiler
 							locationOffset = std::max(locationOffset, (sint32)parameter.exportParam + 1);
 					}
 				}
-				else if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex)
-				{
-					// Without a geometry stage, _emitVSExports emits the 32-slot
-					// pass-through interface (active and zero-filled dummy outputs).
-					locationOffset = 32;
-				}
 				for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
 				{
 					if (!decompilerContext->output->streamoutBufferWriteMask[i])
