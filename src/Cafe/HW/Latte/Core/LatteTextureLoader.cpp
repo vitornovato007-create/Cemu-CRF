@@ -489,6 +489,14 @@ void decodeBC5Block_UNORM(uint8* blockStorage, float* rgOutput)
 	}
 }
 
+void decodeBC4Block_SNORM(uint8* blockStorage, float* rOutput)
+{
+	float rgOutput[4 * 4 * 2];
+	decodeBC5Block_SNORM(blockStorage, rgOutput);
+	for (uint32 i = 0; i < 16; ++i)
+		rOutput[i] = rgOutput[i * 2];
+}
+
 void decodeBC5Block_SNORM(uint8* blockStorage, float* rgOutput) // todo - can merge this with the UNORM implementation by using a template?
 {
 	uint8* blockInput = (uint8*)blockStorage;

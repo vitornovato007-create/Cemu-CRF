@@ -46,6 +46,7 @@ void decodeBC3Block_UNORM(uint8* inputData, float* imageRGBA);
 void decodeBC4Block_UNORM(uint8* blockStorage, float* rOutput);
 void decodeBC5Block_UNORM(uint8* blockStorage, float* rgOutput);
 void decodeBC5Block_SNORM(uint8* blockStorage, float* rgOutput);
+void decodeBC4Block_SNORM(uint8* blockStorage, float* rOutput);
 using decodingFn = void (uint8 *, float *);
 
 inline void BC1_GetPixel(uint8* inputData, sint32 x, sint32 y, uint8 rgba[4])
@@ -2094,7 +2095,8 @@ public:
 };
 
 
-class TextureDecoder_BC4_To_R8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC4_To_R8>
+template<decodingFn fn, bool signedOutput>
+class TextureDecoder_BC4_To_R8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC4_To_R8<fn, signedOutput>>
 {
 public:
 
@@ -2114,7 +2116,7 @@ public:
 				sint32 blockSizeY = (std::min)(4, textureLoader->height - y);
 				// decode 4x4 pixels at once
 				float rBlock[4 * 4 * 1];
-				decodeBC4Block_UNORM(blockData, rBlock);
+				fn(blockData, rBlock)
 
 				for (sint32 py = 0; py < blockSizeY; py++)
 				{
@@ -2123,7 +2125,10 @@ public:
 					{
 						sint32 pixelOffset = (x + px + yc * textureLoader->width); // write to target buffer
 						float red = rBlock[(px + py * 4) * 1 + 0];
-						*(outputData + pixelOffset + 0) = (uint8)(red * 255);
+						if constexpr (signedOutput)
+							*(sint8*)(outputData + pixelOffset) = (sint8)(red * 127.0f);
+						else
+							*(outputData + pixelOffset) = (uint8)(red * 255.0f);
 					}
 				}
 			}
@@ -2133,9 +2138,9 @@ public:
 	void decodePixelToRGBA(uint8* blockData, uint8* outputPixel, uint8 blockOffsetX, uint8 blockOffsetY) override
 	{
 		float rBlock[4 * 4 * 1];
-		decodeBC4Block_UNORM(blockData, rBlock);
+		fn(blockData, rBlock)
 		float red = rBlock[(blockOffsetX + blockOffsetY * 4) * 1 + 0];
-		*(outputPixel + 0) = (uint8)(red * 255.0f);
+		*(outputPixel + 0) = signedOutput ? (uint8)((0.5f + red * 0.5f) * 255.0f) : (uint8)(red * 255.0f);
 		*(outputPixel + 1) = 0;
 		*(outputPixel + 2) = 0;
 		*(outputPixel + 3) = 255;
@@ -2177,8 +2182,8 @@ public:
 		*(outputPixel + 3) = 255;
 	}
 };
-template<decodingFn fn>
-class TextureDecoder_BC5_To_R8G8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC5_To_R8G8<fn>>
+template<decodingFn fn, bool signedOutput = false>
+class TextureDecoder_BC5_To_R8G8 : public TextureDecoder, public SingletonClass<TextureDecoder_BC5_To_R8G8<fn, signedOutput>>
 {
 public:
 
@@ -2208,8 +2213,16 @@ public:
 						sint32 pixelOffset = (x + px + yc * textureLoader->width) * 2; // write to target buffer
 						float red = rgBlock[(px + py * 4) * 2 + 0];
 						float green = rgBlock[(px + py * 4) * 2 + 1];
-						*(outputData + pixelOffset + 0) = (uint8)(red * 255);
-						*(outputData + pixelOffset + 1) = (uint8)(green * 255);
+						if constexpr (signedOutput)
+						{
+							*(sint8*)(outputData + pixelOffset + 0) = (sint8)(red * 127.0f);
+							*(sint8*)(outputData + pixelOffset + 1) = (sint8)(green * 127.0f);
+						}
+						else
+						{
+							*(outputData + pixelOffset + 0) = (uint8)(red * 255.0f);
+							*(outputData + pixelOffset + 1) = (uint8)(green * 255.0f);
+						}
 					}
 				}
 			}
@@ -2219,11 +2232,11 @@ public:
 	void decodePixelToRGBA(uint8* blockData, uint8* outputPixel, uint8 blockOffsetX, uint8 blockOffsetY) override
 	{
 		float rgBlock[4 * 4 * 2];
-		decodeBC5Block_UNORM(blockData, rgBlock);
+		fn(blockData, rgBlock);
 		float red = rgBlock[(blockOffsetX + blockOffsetY * 4) * 2 + 0];
 		float green = rgBlock[(blockOffsetX + blockOffsetY * 4) * 2 + 1];
-		*(outputPixel + 0) = (uint8)(red * 255.0f);
-		*(outputPixel + 1) = (uint8)(green * 255.0f);
+		*(outputPixel + 0) = signedOutput ? (uint8)((0.5f + red * 0.5f) * 255.0f) : (uint8)(red * 255.0f);
+		*(outputPixel + 1) = signedOutput ? (uint8)((0.5f + green * 0.5f) * 255.0f) : (uint8)(green * 255.0f);
 		*(outputPixel + 2) = 0;
 		*(outputPixel + 3) = 255;
 	}

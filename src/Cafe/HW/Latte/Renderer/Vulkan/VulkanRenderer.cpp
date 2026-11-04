@@ -2654,7 +2654,7 @@ void VulkanRenderer::GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isD
 			else
 			{
 				formatInfoOut->vkImageFormat = VK_FORMAT_R8_UNORM;
-				formatInfoOut->decoder = TextureDecoder_BC4_To_R8::getInstance();
+				formatInfoOut->decoder = TextureDecoder_BC4_To_R8<decodeBC4Block_UNORM, false>::getInstance();
 			}
 			break;
 		case Latte::E_GX2SURFFMT::BC4_SNORM:
@@ -2666,7 +2666,7 @@ void VulkanRenderer::GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isD
 			else
 			{
 				formatInfoOut->vkImageFormat = VK_FORMAT_R8_SNORM;
-				formatInfoOut->decoder = TextureDecoder_BC4_To_R8::getInstance();
+				formatInfoOut->decoder = TextureDecoder_BC4_To_R8<decodeBC4Block_SNORM, true>::getInstance();
 			}
 			break;
 		case Latte::E_GX2SURFFMT::BC5_UNORM:
@@ -2690,7 +2690,7 @@ void VulkanRenderer::GetTextureFormatInfoVK(Latte::E_GX2SURFFMT format, bool isD
 			else
 			{
 				formatInfoOut->vkImageFormat = VK_FORMAT_R8G8_SNORM;
-				formatInfoOut->decoder = TextureDecoder_BC5_To_R8G8<decodeBC5Block_SNORM>::getInstance();
+				formatInfoOut->decoder = TextureDecoder_BC5_To_R8G8<decodeBC5Block_SNORM, true>::getInstance();
 			}
 			break;
 		case Latte::E_GX2SURFFMT::R24_X8_UNORM:
