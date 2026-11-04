@@ -544,6 +544,26 @@ namespace NativeEmulation
             report.append(fmt::format("Debug messenger VkResult: {}\n\n", validation.debugMessengerResult));
         else
             report.append("\n");
+        if (auto* renderer = VulkanRenderer::GetInstance())
+        {
+            if (auto* memoryManager = renderer->GetMemoryManager())
+            {
+                const auto memory = memoryManager->GetDiagnostics();
+                report.append("Vulkan memory diagnostics (current allocator snapshot + process-lifetime counters):\n");
+                report.append(fmt::format("  Texture heap count: {}\n", memory.textureHeapCount));
+                report.append(fmt::format("  Texture heap allocated/reserved: {}/{} bytes\n", memory.textureAllocatedBytes, memory.textureHeapBytes));
+                report.append(fmt::format("  Staging allocator used/free: {}/{} bytes\n", memory.stagingBufferBytes - memory.stagingBufferFreeBytes, memory.stagingBufferFreeBytes));
+                report.append(fmt::format("  Index allocator used/free: {}/{} bytes\n", memory.indexBufferBytes - memory.indexBufferFreeBytes, memory.indexBufferFreeBytes));
+                report.append(fmt::format("  Vertex-stride allocator used/free: {}/{} bytes\n", memory.strideBufferBytes - memory.strideBufferFreeBytes, memory.strideBufferFreeBytes));
+                report.append(fmt::format("  Buffer create attempts/success/failure: {}/{}/{}\n", memory.bufferCreateAttempts, memory.bufferCreateSuccesses, memory.bufferCreateFailures));
+                report.append(fmt::format("  Image allocation attempts/success/failure: {}/{}/{}\n", memory.imageAllocationAttempts, memory.imageAllocationSuccesses, memory.imageAllocationFailures));
+                report.append(fmt::format("  Image allocation bytes (cumulative successful requests): {}\n\n", memory.imageAllocationBytes));
+            }
+        }
+        else
+        {
+            report.append("Vulkan memory diagnostics: renderer not initialized in this process.\n\n");
+        }
         AppendTextureCacheSnapshot(report);
         report.append(s_androidLogCapture.Snapshot());
         if (report.empty() || report.back() != '\n')
