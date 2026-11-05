@@ -603,10 +603,15 @@ namespace LatteDecompiler
 				// XFB interface locations share the stage output-location namespace.
 				// Reserve the locations already occupied by the VS->GS ring block
 				// or by GS->PS exports before emitting transform-feedback blocks.
-				if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex &&
-					decompilerContext->options->usesGeometryShader)
+				if (decompilerContext->shaderType == LatteConst::ShaderType::Vertex)
 				{
-					locationOffset = (sint32)decompilerContext->shader->ringParameterCount;
+					if (decompilerContext->options->usesGeometryShader)
+						locationOffset = (sint32)decompilerContext->shader->ringParameterCount;
+					else
+					{
+						auto* psInputTable = LatteSHRC_GetPSInputTable();
+						locationOffset = (sint32)(std::min<uint32>)( (uint32)psInputTable->count, 32u);
+					}
 				}
 				else if (decompilerContext->shaderType == LatteConst::ShaderType::Geometry &&
 					decompilerContext->parsedGSCopyShader)
@@ -614,8 +619,8 @@ namespace LatteDecompiler
 					for (sint32 p = 0; p < decompilerContext->parsedGSCopyShader->numParam; p++)
 					{
 						const auto& parameter = decompilerContext->parsedGSCopyShader->paramMapping[p];
-						if (parameter.exportType == 2)
-							locationOffset = std::max(locationOffset, (sint32)parameter.exportParam + 1);
+						if (parameter.exportType == 2 && parameter.exportParam < 16)
+							locationOffset = (std::max)(locationOffset, (sint32)parameter.exportParam + 1);
 					}
 				}
 				for (uint32 i = 0; i < LATTE_NUM_STREAMOUT_BUFFER; i++)
