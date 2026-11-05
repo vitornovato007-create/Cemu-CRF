@@ -401,15 +401,19 @@ namespace LatteDecompiler
 			src->addFmt(" vec4 passParameterSem{};" _CRLF, psInputTable->import[psInputIndex].semanticId);
 		}
 
-		// TODO: fix this
-		for (uint32 i = 0; i < 32; i++)
+		// Only fill interface locations present in the pixel-shader input
+		// table. Declaring all 32 dummy outputs can occupy locations needed
+		// by transform-feedback outputs and create overlapping GLSL locations.
+		const uint32 dummyParameterCount = (std::min<uint32>)(
+			(uint32)psInputTable->count, (uint32)activePassParams.size());
+		for (uint32 i = 0; i < dummyParameterCount; i++)
 		{
 			if (!activePassParams[i])
 				src->addFmt("layout(location = {0}) out vec4 dummyPassParameterSem{0};" _CRLF, i);
 		}
 
 		src->add("void dummyPassParamInit() {" _CRLF);
-		for (uint32 i = 0; i < 32; i++)
+		for (uint32 i = 0; i < dummyParameterCount; i++)
 		{
 			if (!activePassParams[i])
 				src->addFmt("dummyPassParameterSem{} = vec4(0.0, 0.0, 0.0, 0.0);" _CRLF, i);
