@@ -1034,8 +1034,10 @@ bool PipelineCompiler::InitFromCurrentGPUState(PipelineInfo* pipelineInfo, const
 bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool showInOverlay)
 {
 	VulkanRenderer* vkRenderer = VulkanRenderer::GetInstance();
+	const auto shaderPreparationStart = std::chrono::steady_clock::now();
+	const bool pipelineCompileControlAvailable = vkRenderer->m_featureControl.deviceExtensions.pipeline_creation_cache_control;
 
-	if (!vkRenderer->m_featureControl.deviceExtensions.pipeline_creation_cache_control)
+	if (!pipelineCompileControlAvailable)
 		forceCompile = true; // if VK_EXT_pipeline_creation_cache_control is not supported we always force synchronous compilation
 
 	if (!forceCompile)
@@ -1057,6 +1059,18 @@ bool PipelineCompiler::Compile(bool forceCompile, bool isRenderThread, bool show
 			m_vkPixelShader->PreponeCompilation(isRenderThread);
 		if (m_vkGeometryShader && m_vkGeometryShader->IsCompiled() == false)
 			m_vkGeometryShader->PreponeCompilation(isRenderThread);
+	}
+
+	const double shaderPreparationMs = std::chrono::duration<double, std::milli>(
+		std::chrono::steady_clock::now() - shaderPreparationStart).count();
+	if (forceCompile && shaderPreparationMs >= 5.0)
+	{
+		cemuLog_log(LogType::Force,
+			"[PipelineTiming] Shader readiness/compilation wait {:.2f} ms (renderThread={}, cacheControl={}, VS={:016x}, PS={:016x}, GS={:016x})",
+			shaderPreparationMs, isRenderThread, pipelineCompileControlAvailable,
+			m_vkVertexShader ? m_vkVertexShader->GetBaseHash() : 0,
+			m_vkPixelShader ? m_vkPixelShader->GetBaseHash() : 0,
+			m_vkGeometryShader ? m_vkGeometryShader->GetBaseHash() : 0);
 	}
 
 	// A completed compilation can still have failed. Do not pass null shader
